@@ -255,36 +255,23 @@ set_mysql_addr() {
   local config_file=\$1 address=\$2 temp_file
   temp_file=\"\${config_file}.mysql.\$\$\"
   awk -v address=\"\${address}\" '
-    function add_value() {
-      if (in_section && !written) print section_indent \"  mysql_addr = \\\"\" address \"\\\"\"
-    }
     /^[[:space:]]*\[/ {
-      add_value()
       current = \$0
       sub(/^[[:space:]]*/, \"\", current)
       sub(/[[:space:]]*\$/, \"\", current)
-      in_section = (current == \"[group.node.mysql_config]\")
-      written = 0
-      if (in_section) {
-        match(\$0, /^[[:space:]]*/)
-        section_indent = substr(\$0, RSTART, RLENGTH)
-        found_section = 1
-      }
+      in_section = (current == \"[[group.node]]\")
     }
     in_section && /^[[:space:]]*mysql_addr[[:space:]]*=/ {
       match(\$0, /^[[:space:]]*/)
       print substr(\$0, RSTART, RLENGTH) \"mysql_addr = \\\"\" address \"\\\"\"
-      written = 1
+      found = 1
       next
     }
     { print }
-    END {
-      add_value()
-      if (!found_section) exit 1
-    }
+    END { if (!found) exit 1 }
   ' \"\${config_file}\" >\"\${temp_file}\" || {
     rm -f -- \"\${temp_file}\"
-    echo \"missing [group.node.mysql_config] in \${config_file}\" >&2
+    echo \"missing mysql_addr in [[group.node]] in \${config_file}\" >&2
     exit 1
   }
   mv -- \"\${temp_file}\" \"\${config_file}\"

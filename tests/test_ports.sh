@@ -53,10 +53,10 @@ printf '%s\n' \
 printf '%s\n' \
 	'[[group]]' \
 	'  [[group.node]]' \
+	'    mysql_addr = "127.0.0.1:1688"' \
 	'    [group.node.config]' \
 	'      RUN_LOG_LEVEL = "INFO"' \
-	'    [group.node.mysql_config]' \
-	'      mysql_addr = "127.0.0.1:1688"' >"${EXEC_STAGE}/ys1703.toml"
+	'    [group.node.mysql_config]' >"${EXEC_STAGE}/ys1703.toml"
 printf '%s\n' '#!/usr/bin/env bash' 'bash -se' >"${FAKE_BIN}/ssh"
 chmod +x "${FAKE_BIN}/ssh"
 
