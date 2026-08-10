@@ -73,7 +73,8 @@
 - 发现：2026-08-10
 - 错误信息：CLI 无 MySQL 模式参数，无法向 yasboot 传递 `-m mysql` 或设置 `mysql_addr`。
 - 需求：增加 MySQL 模式、端口校验、预检查和 TOML 修改。
-- 状态：`IN PROGRESS`
+- 状态：`FIXED`
+- 修复版本：`0.4.1`
 - 补充错误：`YAS-00021 failed to get parameter item by name, parameter "MYSQL_ADDR" does not exist`。
 - 原因：`mysql_addr` 被插入错误 section；应更新 yasboot 在 `[[group.node]]` 生成的字段。
 
@@ -82,4 +83,5 @@
 - 发现：2026-08-10
 - 问题：安装器仍暴露 `--recommend-memory` 和 `--memory-limit`。
 - 需求：删除两个参数和对应生成逻辑，仅保留绝对内存 `--memory-size`。
-- 状态：`IN PROGRESS`
+- 状态：`FIXED`
+- 修复版本：`0.4.0`
