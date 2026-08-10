@@ -54,6 +54,7 @@
 - 错误信息：`file /home/yashan/.yasboot/ys1903.env is already exist`、`yasdb path ... should be empty`。
 - 原因：yinstall 的 `--force` 没有传给 `yasboot package se gen`。
 - 状态：`FIXED`
+- 修复版本：`0.3.2`
 - 修复：force 重部署时向 yasboot 生成命令传递 `--force`。
 
 ## YINSTALL-007 — 默认推荐内存并缺少列存缓冲配置
