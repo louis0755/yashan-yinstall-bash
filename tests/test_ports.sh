@@ -46,14 +46,12 @@ printf '%s\n' \
 	'  [om.config]' \
 	'    LISTEN_ADDR = "127.0.0.1:1686"' \
 	'[[host]]' \
-	'  memory_limit = "5152M"' \
 	'  [host.yasagent]' \
 	'    [host.yasagent.config]' \
 	'      LISTEN_ADDR = "127.0.0.1:1687"' >"${EXEC_STAGE}/hosts.toml"
 printf '%s\n' \
 	'[[group]]' \
 	'  [[group.node]]' \
-	'    memory_limit = "5152M"' \
 	'    [group.node.config]' \
 	'      RUN_LOG_LEVEL = "INFO"' >"${EXEC_STAGE}/ys1703.toml"
 printf '%s\n' '#!/usr/bin/env bash' 'bash -se' >"${FAKE_BIN}/ssh"

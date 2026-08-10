@@ -64,3 +64,5 @@
 - 需求：默认不启用推荐内存；显式选项才启用推荐；绝对内存覆盖 TOML；节点配置写入 `COLUMNAR_BUFFER_SIZE = "256M"`。
 - 状态：`FIXED`
 - 修复版本：`0.3.2`
+- 补充错误：默认非推荐模式生成的 TOML 无 `memory_limit`，报 `missing memory_limit in [[host]]`。
+- 最终修复版本：`0.3.3`，改为字段存在时更新、缺失时插入。

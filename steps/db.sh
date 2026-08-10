@@ -175,23 +175,36 @@ set_memory_limit() {
   local config_file=\$1 section=\$2 temp_file
   temp_file=\"\${config_file}.memory.\$\$\"
   awk -v section=\"\${section}\" -v value=\"\${memory_value}\" '
+    function add_value() {
+      if (in_section && !written) print section_indent \"  memory_limit = \\\"\" value \"\\\"\"
+    }
     /^[[:space:]]*\[/ {
+      add_value()
       current = \$0
       sub(/^[[:space:]]*/, \"\", current)
       sub(/[[:space:]]*$/, \"\", current)
       in_section = (current == section)
+      written = 0
+      if (in_section) {
+        match(\$0, /^[[:space:]]*/)
+        section_indent = substr(\$0, RSTART, RLENGTH)
+        found_section = 1
+      }
     }
     in_section && /^[[:space:]]*memory_limit[[:space:]]*=/ {
       match(\$0, /^[[:space:]]*/)
       print substr(\$0, RSTART, RLENGTH) \"memory_limit = \\\"\" value \"\\\"\"
-      found = 1
+      written = 1
       next
     }
     { print }
-    END { if (!found) exit 1 }
+    END {
+      add_value()
+      if (!found_section) exit 1
+    }
   ' \"\${config_file}\" >\"\${temp_file}\" || {
     rm -f -- \"\${temp_file}\"
-    echo \"missing memory_limit in \${section}\" >&2
+    echo \"missing section \${section} in \${config_file}\" >&2
     exit 1
   }
   mv -- \"\${temp_file}\" \"\${config_file}\"
