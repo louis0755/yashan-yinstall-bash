@@ -86,7 +86,7 @@ validate_extra_args() {
 }
 
 db_generate_config() {
-	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args
+	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args recommend_args force_arg
 	validate_extra_args "${YASBOOT_GEN_EXTRA_ARGS}" "--yasboot-gen-extra-args"
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
@@ -101,12 +101,16 @@ db_generate_config() {
 	else
 		auth_args="-p ${password_q}"
 	fi
+	recommend_args=""
+	[[ ${RECOMMEND_MEMORY} == false ]] || recommend_args="--recommend-param --memory-limit ${MEMORY_LIMIT}"
+	force_arg=""
+	[[ ${FORCE} == false ]] || force_arg="--force"
 	remote_exec C-004 "${host}" true "
 set -e
 host_ip=\$(hostname -I | awk '{print \$1}')
 test -n \"\${host_ip}\"
 cd ${stage_q}
-runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} --recommend-param -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} --memory-limit ${MEMORY_LIMIT} --node 1 ${YASBOOT_GEN_EXTRA_ARGS}
+runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${recommend_args} ${force_arg} --node 1 ${YASBOOT_GEN_EXTRA_ARGS}
 test -f ${stage_q}/${CLUSTER}.toml
 "
 }
@@ -193,10 +197,50 @@ set_memory_limit() {
   mv -- \"\${temp_file}\" \"\${config_file}\"
 }
 
+set_columnar_buffer_size() {
+  local config_file=\$1 temp_file
+  temp_file=\"\${config_file}.columnar.\$\$\"
+  awk '
+    function add_value() {
+      if (in_section && !written) print section_indent \"  COLUMNAR_BUFFER_SIZE = \\\"256M\\\"\"
+    }
+    /^[[:space:]]*\[/ {
+      add_value()
+      current = \$0
+      sub(/^[[:space:]]*/, \"\", current)
+      sub(/[[:space:]]*\$/, \"\", current)
+      in_section = (current == \"[group.node.config]\")
+      written = 0
+      if (in_section) {
+        match(\$0, /^[[:space:]]*/)
+        section_indent = substr(\$0, RSTART, RLENGTH)
+        found_section = 1
+      }
+    }
+    in_section && /^[[:space:]]*COLUMNAR_BUFFER_SIZE[[:space:]]*=/ {
+      match(\$0, /^[[:space:]]*/)
+      print substr(\$0, RSTART, RLENGTH) \"COLUMNAR_BUFFER_SIZE = \\\"256M\\\"\"
+      written = 1
+      next
+    }
+    { print }
+    END {
+      add_value()
+      if (!found_section) exit 1
+    }
+  ' \"\${config_file}\" >\"\${temp_file}\" || {
+    rm -f -- \"\${temp_file}\"
+    echo \"missing [group.node.config] in \${config_file}\" >&2
+    exit 1
+  }
+  mv -- \"\${temp_file}\" \"\${config_file}\"
+}
+
 if [[ -n \${memory_value} ]]; then
   set_memory_limit \"\${hosts_file}\" '[[host]]'
   set_memory_limit \"\${cluster_file}\" '[[group.node]]'
 fi
+set_columnar_buffer_size "\${cluster_file}"
 PORTS
 "
 }

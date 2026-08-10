@@ -37,7 +37,8 @@ Database options: --package, --db-admin-password, --cluster, --os-user,
   --os-group, --install-path, --data-path, --log-path, --stage-dir,
   --db-port, --yasom-port, --yasagent-port, --replicat-port, --begin-port,
   --memory-limit, --yasboot-gen-extra-args,
-  --memory-size (integer M by default, or G),
+  --recommend-memory (let yasboot calculate memory from --memory-limit),
+  --memory-size (write an exact integer M by default, or G),
   --yasboot-deploy-extra-args.
 
 Standby options: --standby-join-cmd and --standby-remove-cmd are required

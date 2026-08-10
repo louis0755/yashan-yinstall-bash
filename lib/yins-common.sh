@@ -39,6 +39,7 @@ init_defaults() {
 	REPLICAT_PORT=""
 	MEMORY_LIMIT=50
 	MEMORY_SIZE=""
+	RECOMMEND_MEMORY=false
 	STANDBY_JOIN_CMD=""
 	STANDBY_REMOVE_CMD=""
 	YASBOOT_GEN_EXTRA_ARGS=""
@@ -151,6 +152,10 @@ parse_args() {
 		--memory-size)
 			MEMORY_SIZE=${2:?missing value for $1}
 			shift 2
+			;;
+		--recommend-memory)
+			RECOMMEND_MEMORY=true
+			shift
 			;;
 		--standby-join-cmd)
 			STANDBY_JOIN_CMD=${2:?missing value for $1}
@@ -311,6 +316,7 @@ validate_request() {
 	resolve_database_ports
 	is_percent "${MEMORY_LIMIT}" || die "memory limit must be 1-100"
 	[[ -z ${MEMORY_SIZE} || ${MEMORY_SIZE} =~ ^[1-9][0-9]*([MmGg])?$ ]] || die "memory size must be an integer with optional M or G suffix"
+	[[ ${RECOMMEND_MEMORY} == false || -z ${MEMORY_SIZE} ]] || die "--recommend-memory cannot be combined with --memory-size"
 	is_identifier "${CLUSTER}" || die "invalid cluster name"
 	is_identifier "${OS_USER}" || die "invalid OS user"
 	is_identifier "${OS_GROUP}" || die "invalid OS group"

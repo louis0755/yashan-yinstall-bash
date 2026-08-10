@@ -25,6 +25,19 @@ grep -F -- '--begin-port 1703' "${SCRIPT_LOG}" >/dev/null
 grep -F -- '1701 1702' "${SCRIPT_LOG}" >/dev/null
 grep -F -- "set_listen_addr '[om.config]'" "${SCRIPT_LOG}" >/dev/null
 grep -F -- "set_listen_addr '[host.yasagent.config]'" "${SCRIPT_LOG}" >/dev/null
+if grep -F -- '--recommend-param' "${SCRIPT_LOG}" >/dev/null; then
+	echo 'default generation unexpectedly enabled recommended memory' >&2
+	exit 1
+fi
+
+: >"${SCRIPT_LOG}"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1703 \
+	--db-port 1703 --install-path /data/yashan/ys1703/yasdb-home \
+	--data-path /data/yashan/ys1703/yasdb-data --log-path /data/yashan/ys1703/yasdb-log \
+	--stage-dir /data/yashan/ys1703/install --recommend-memory --memory-limit 25 \
+	--include-steps C-004 --log-dir "${TMP_DIR}/recommend-logs"
+grep -F -- '--recommend-param --memory-limit 25' "${SCRIPT_LOG}" >/dev/null
 
 EXEC_STAGE="${TMP_DIR}/stage"
 mkdir -p -- "${EXEC_STAGE}"
@@ -40,7 +53,9 @@ printf '%s\n' \
 printf '%s\n' \
 	'[[group]]' \
 	'  [[group.node]]' \
-	'    memory_limit = "5152M"' >"${EXEC_STAGE}/ys1703.toml"
+	'    memory_limit = "5152M"' \
+	'    [group.node.config]' \
+	'      RUN_LOG_LEVEL = "INFO"' >"${EXEC_STAGE}/ys1703.toml"
 printf '%s\n' '#!/usr/bin/env bash' 'bash -se' >"${FAKE_BIN}/ssh"
 chmod +x "${FAKE_BIN}/ssh"
 
@@ -55,6 +70,7 @@ grep -F '    LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '      LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '  memory_limit = "1024M"' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '    memory_limit = "1024M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
+grep -F '      COLUMNAR_BUFFER_SIZE = "256M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 
 LOCAL_SCRIPT_LOG="${TMP_DIR}/local-scripts"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 1' >"${FAKE_BIN}/ssh"

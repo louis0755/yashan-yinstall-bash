@@ -47,3 +47,20 @@
 - 错误信息：`1G` 在 `515250M` 主机上向上取整为 `1%`，实际约 `5152M`。
 - 状态：`FIXED`
 - 修复：直接修改 `hosts.toml` 和集群 TOML 中的 `memory_limit`，不再换算百分比。
+
+## YINSTALL-006 — 重部署 force 未传递给 yasboot
+
+- 发现：2026-08-10
+- 错误信息：`file /home/yashan/.yasboot/ys1903.env is already exist`、`yasdb path ... should be empty`。
+- 原因：yinstall 的 `--force` 没有传给 `yasboot package se gen`。
+- 状态：`FIXED`
+- 修复：force 重部署时向 yasboot 生成命令传递 `--force`。
+
+## YINSTALL-007 — 默认推荐内存并缺少列存缓冲配置
+
+- 发现：2026-08-10
+- 错误信息：`node 1-1 memory_limit 1024M is less than 5152MB`。
+- 原因：配置生成命令无条件传入 `--recommend-param`，且生成后未设置 `COLUMNAR_BUFFER_SIZE`。
+- 需求：默认不启用推荐内存；显式选项才启用推荐；绝对内存覆盖 TOML；节点配置写入 `COLUMNAR_BUFFER_SIZE = "256M"`。
+- 状态：`FIXED`
+- 修复版本：`0.3.2`
