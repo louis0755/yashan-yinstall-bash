@@ -33,21 +33,28 @@ printf '%s\n' \
 	'  [om.config]' \
 	'    LISTEN_ADDR = "127.0.0.1:1686"' \
 	'[[host]]' \
+	'  memory_limit = "5152M"' \
 	'  [host.yasagent]' \
 	'    [host.yasagent.config]' \
 	'      LISTEN_ADDR = "127.0.0.1:1687"' >"${EXEC_STAGE}/hosts.toml"
+printf '%s\n' \
+	'[[group]]' \
+	'  [[group.node]]' \
+	'    memory_limit = "5152M"' >"${EXEC_STAGE}/ys1703.toml"
 printf '%s\n' '#!/usr/bin/env bash' 'bash -se' >"${FAKE_BIN}/ssh"
 chmod +x "${FAKE_BIN}/ssh"
 
 env PATH="${FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install \
 	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1703 \
 	--db-port 1703 --install-path "${TMP_DIR}/yasdb-home" --data-path "${TMP_DIR}/yasdb-data" \
-	--log-path "${TMP_DIR}/yasdb-log" --stage-dir "${EXEC_STAGE}" --include-steps C-005 --log-dir "${TMP_DIR}/execute-logs"
+	--log-path "${TMP_DIR}/yasdb-log" --stage-dir "${EXEC_STAGE}" --memory-size 1G --include-steps C-005 --log-dir "${TMP_DIR}/execute-logs"
 
 grep -E 'LISTEN_ADDR = ".*:1701"' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -E 'LISTEN_ADDR = ".*:1702"' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '    LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '      LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
+grep -F '  memory_limit = "1024M"' "${EXEC_STAGE}/hosts.toml" >/dev/null
+grep -F '    memory_limit = "1024M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 
 LOCAL_SCRIPT_LOG="${TMP_DIR}/local-scripts"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 1' >"${FAKE_BIN}/ssh"

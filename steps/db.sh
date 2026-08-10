@@ -3,7 +3,6 @@
 run_db_install() {
 	local host=$1
 	run_os_prepare "${host}"
-	resolve_memory_limit "${host}"
 	run_step C-001 "${host}" "check package and target state" db_precheck "${host}"
 	run_step C-002 "${host}" "upload package" db_upload_package "${host}"
 	run_step C-003 "${host}" "extract package" db_extract_package "${host}"
@@ -12,25 +11,6 @@ run_db_install() {
 	run_step C-006 "${host}" "install YashanDB software" db_install_software "${host}"
 	run_step C-007 "${host}" "deploy standalone database" db_deploy "${host}"
 	run_step C-008 "${host}" "verify standalone database" db_verify "${host}"
-}
-
-resolve_memory_limit() {
-	local host=$1 size_mb total_mb calculated
-	[[ -n ${MEMORY_SIZE} ]] || return 0
-	size_mb=${MEMORY_SIZE%[MmGg]}
-	case "${MEMORY_SIZE}" in *[Gg]) size_mb=$((size_mb * 1024)) ;; esac
-	if [[ ${LOCAL} == true ]]; then
-		total_mb=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
-	else
-		ssh_args
-		total_mb=$(ssh "${SSH_ARGS[@]}" "${SSH_USER}@${host}" "awk '/^MemTotal:/ { print int(\$2 / 1024) }' /proc/meminfo")
-	fi
-	[[ ${total_mb} =~ ^[1-9][0-9]*$ ]] || die "failed to read target memory"
-	((size_mb <= total_mb)) || die "memory size ${MEMORY_SIZE} exceeds target memory ${total_mb}M"
-	calculated=$(((size_mb * 100 + total_mb - 1) / total_mb))
-	((calculated < 1)) && calculated=1
-	MEMORY_LIMIT=${calculated}
-	log INFO MEMORY "${host}" "memory size ${MEMORY_SIZE} resolved to ${MEMORY_LIMIT}% of ${total_mb}M"
 }
 
 remote_package_path() {
@@ -132,21 +112,30 @@ test -f ${stage_q}/${CLUSTER}.toml
 }
 
 db_configure_ports() {
-	local host=$1 stage_q hosts_q user_q
+	local host=$1 stage_q hosts_q cluster_config_q user_q memory_value
 	stage_q=$(quote "${STAGE_DIR}")
 	hosts_q=$(quote "${STAGE_DIR}/hosts.toml")
+	cluster_config_q=$(quote "${STAGE_DIR}/${CLUSTER}.toml")
 	user_q=$(quote "${OS_USER}")
+	memory_value=""
+	if [[ -n ${MEMORY_SIZE} ]]; then
+		memory_value=${MEMORY_SIZE%[MmGg]}
+		case ${MEMORY_SIZE} in *[Gg]) memory_value=$((memory_value * 1024))M ;; *) memory_value=${memory_value}M ;; esac
+	fi
 	remote_exec C-005 "${host}" true "
 set -e
 host_ip=\$(hostname -I | awk '{print \$1}')
 test -n \"\${host_ip}\"
 test -f ${hosts_q}
-runuser -u ${user_q} -- bash -s -- ${hosts_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} <<'PORTS'
+test -f ${cluster_config_q}
+runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_value}") <<'PORTS'
 set -euo pipefail
 hosts_file=\$1
-host_ip=\$2
-yasom_port=\$3
-yasagent_port=\$4
+cluster_file=\$2
+host_ip=\$3
+yasom_port=\$4
+yasagent_port=\$5
+memory_value=\$6
 
 set_listen_addr() {
   local section=\$1 address=\$2 temp_file
@@ -177,6 +166,37 @@ set_listen_addr() {
 
 set_listen_addr '[om.config]' \"\${host_ip}:\${yasom_port}\"
 set_listen_addr '[host.yasagent.config]' \"\${host_ip}:\${yasagent_port}\"
+
+set_memory_limit() {
+  local config_file=\$1 section=\$2 temp_file
+  temp_file=\"\${config_file}.memory.\$\$\"
+  awk -v section=\"\${section}\" -v value=\"\${memory_value}\" '
+    /^[[:space:]]*\[/ {
+      current = \$0
+      sub(/^[[:space:]]*/, \"\", current)
+      sub(/[[:space:]]*$/, \"\", current)
+      in_section = (current == section)
+    }
+    in_section && /^[[:space:]]*memory_limit[[:space:]]*=/ {
+      match(\$0, /^[[:space:]]*/)
+      print substr(\$0, RSTART, RLENGTH) \"memory_limit = \\\"\" value \"\\\"\"
+      found = 1
+      next
+    }
+    { print }
+    END { if (!found) exit 1 }
+  ' \"\${config_file}\" >\"\${temp_file}\" || {
+    rm -f -- \"\${temp_file}\"
+    echo \"missing memory_limit in \${section}\" >&2
+    exit 1
+  }
+  mv -- \"\${temp_file}\" \"\${config_file}\"
+}
+
+if [[ -n \${memory_value} ]]; then
+  set_memory_limit \"\${hosts_file}\" '[[host]]'
+  set_memory_limit \"\${cluster_file}\" '[[group.node]]'
+fi
 PORTS
 "
 }
