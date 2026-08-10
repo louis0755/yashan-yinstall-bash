@@ -1,0 +1,42 @@
+# Issue Tracker
+
+本仓库问题使用递增编号 `YINSTALL-NNN`，并同步到 GitHub 仓库 `louis0755/yashan-yinstall-bash` 的对应 Issue。提交和关闭说明引用同一编号。
+
+## YINSTALL-001 — C-001 远程检查脚本语法错误
+
+- 发现：2026-08-10
+- 错误信息：`bash: line 10: syntax error: unexpected end of file`。
+- 影响：数据库安装在 C-001 检查阶段中断。
+- 状态：`FIXED`
+- 修复：转义 `steps/db.sh` 中嵌套脚本的双引号。
+
+## YINSTALL-002 — C-005 无法识别缩进的 TOML section
+
+- 发现：2026-08-10
+- 错误信息：`missing LISTEN_ADDR in [om.config]`。
+- 原因：yasboot 生成的 section 带缩进，而 awk 使用整行精确匹配。
+- 影响：安装在 C-005 阶段中断。
+- 状态：`FIXED`
+- 修复：去除 TOML section 首尾空白并保留 `LISTEN_ADDR` 原有缩进。
+- 验证：`tests/test_ports.sh`。
+
+## YINSTALL-003 — C-008 非交互 PATH 找不到 runuser
+
+- 发现：2026-08-10
+- 错误信息：`bash: line 3: runuser: command not found`。
+- 原因：目标机 SSH 非交互 PATH 不含 `/usr/sbin`。
+- 状态：`FIXED`
+- 修复：验证步骤显式加入 `/usr/sbin:/usr/bin:/bin`。
+
+### YINSTALL-003 补充错误
+
+- 错误信息：`runuser: may not be used by non-root users`。
+- 最终修复：只读验证直接执行 yasboot，不再调用 runuser。
+- 修复版本：`0.2.12`。
+
+## YINSTALL-004 — 支持绝对内存并计算部署百分比
+
+- 发现：2026-08-10
+- 需求：支持整数 `M`/`G`（无单位按 M），根据目标机总内存换算本次部署百分比。
+- 状态：`FIXED`
+- 修复版本：`0.3.0`。
