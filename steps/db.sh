@@ -25,6 +25,7 @@ db_precheck() {
 	local host=$1 stage_q ports_q
 	stage_q=$(quote "${STAGE_DIR}")
 	ports_q="$(quote "${YASOM_PORT}") $(quote "${YASAGENT_PORT}") $(quote "${DB_PORT}") $(quote "${REPLICAT_PORT}")"
+	[[ -z ${MYSQL_PORT} ]] || ports_q+=" $(quote "${MYSQL_PORT}")"
 	remote_check C-001 "${host}" "
 set -e
 if [ -e ${stage_q}/${CLUSTER}.toml ] && [ ${FORCE} != true ]; then
@@ -86,7 +87,7 @@ validate_extra_args() {
 }
 
 db_generate_config() {
-	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args recommend_args force_arg
+	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args mode_args force_arg
 	validate_extra_args "${YASBOOT_GEN_EXTRA_ARGS}" "--yasboot-gen-extra-args"
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
@@ -101,8 +102,8 @@ db_generate_config() {
 	else
 		auth_args="-p ${password_q}"
 	fi
-	recommend_args=""
-	[[ ${RECOMMEND_MEMORY} == false ]] || recommend_args="--recommend-param --memory-limit ${MEMORY_LIMIT}"
+	mode_args=""
+	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
 	remote_exec C-004 "${host}" true "
@@ -110,7 +111,7 @@ set -e
 host_ip=\$(hostname -I | awk '{print \$1}')
 test -n \"\${host_ip}\"
 cd ${stage_q}
-runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${recommend_args} ${force_arg} --node 1 ${YASBOOT_GEN_EXTRA_ARGS}
+runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} --node 1 ${YASBOOT_GEN_EXTRA_ARGS}
 test -f ${stage_q}/${CLUSTER}.toml
 "
 }
@@ -132,7 +133,7 @@ host_ip=\$(hostname -I | awk '{print \$1}')
 test -n \"\${host_ip}\"
 test -f ${hosts_q}
 test -f ${cluster_config_q}
-runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_value}") <<'PORTS'
+runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_value}") $(quote "${MYSQL_PORT}") <<'PORTS'
 set -euo pipefail
 hosts_file=\$1
 cluster_file=\$2
@@ -140,6 +141,7 @@ host_ip=\$3
 yasom_port=\$4
 yasagent_port=\$5
 memory_value=\$6
+mysql_port=\$7
 
 set_listen_addr() {
   local section=\$1 address=\$2 temp_file
@@ -249,11 +251,53 @@ set_columnar_buffer_size() {
   mv -- \"\${temp_file}\" \"\${config_file}\"
 }
 
+set_mysql_addr() {
+  local config_file=\$1 address=\$2 temp_file
+  temp_file=\"\${config_file}.mysql.\$\$\"
+  awk -v address=\"\${address}\" '
+    function add_value() {
+      if (in_section && !written) print section_indent \"  mysql_addr = \\\"\" address \"\\\"\"
+    }
+    /^[[:space:]]*\[/ {
+      add_value()
+      current = \$0
+      sub(/^[[:space:]]*/, \"\", current)
+      sub(/[[:space:]]*\$/, \"\", current)
+      in_section = (current == \"[group.node.mysql_config]\")
+      written = 0
+      if (in_section) {
+        match(\$0, /^[[:space:]]*/)
+        section_indent = substr(\$0, RSTART, RLENGTH)
+        found_section = 1
+      }
+    }
+    in_section && /^[[:space:]]*mysql_addr[[:space:]]*=/ {
+      match(\$0, /^[[:space:]]*/)
+      print substr(\$0, RSTART, RLENGTH) \"mysql_addr = \\\"\" address \"\\\"\"
+      written = 1
+      next
+    }
+    { print }
+    END {
+      add_value()
+      if (!found_section) exit 1
+    }
+  ' \"\${config_file}\" >\"\${temp_file}\" || {
+    rm -f -- \"\${temp_file}\"
+    echo \"missing [group.node.mysql_config] in \${config_file}\" >&2
+    exit 1
+  }
+  mv -- \"\${temp_file}\" \"\${config_file}\"
+}
+
 if [[ -n \${memory_value} ]]; then
   set_memory_limit \"\${hosts_file}\" '[[host]]'
   set_memory_limit \"\${cluster_file}\" '[[group.node]]'
 fi
 set_columnar_buffer_size "\${cluster_file}"
+if [[ -n \${mysql_port} ]]; then
+  set_mysql_addr "\${cluster_file}" "\${host_ip}:\${mysql_port}"
+fi
 PORTS
 "
 }

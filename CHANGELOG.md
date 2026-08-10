@@ -1,5 +1,15 @@
 # 变更记录
 
+## 0.4.0 - 2026-08-10
+
+### 新增
+
+- 支持 `--mode mysql --mysql-port PORT`，生成 MySQL 模式配置并设置 `mysql_addr`。
+
+### 变更
+
+- 删除 `--recommend-memory` 和 `--memory-limit`，只保留 `--memory-size`。
+
 ## 0.3.3 - 2026-08-10
 
 ### 修复

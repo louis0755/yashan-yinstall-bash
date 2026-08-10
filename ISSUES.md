@@ -67,3 +67,17 @@
 - 修复版本：`0.3.2`
 - 补充错误：默认非推荐模式生成的 TOML 无 `memory_limit`，报 `missing memory_limit in [[host]]`。
 - 最终修复版本：`0.3.3`，改为字段存在时更新、缺失时插入。
+
+## YINSTALL-008 — 安装器缺少 MySQL 模式和端口配置
+
+- 发现：2026-08-10
+- 错误信息：CLI 无 MySQL 模式参数，无法向 yasboot 传递 `-m mysql` 或设置 `mysql_addr`。
+- 需求：增加 MySQL 模式、端口校验、预检查和 TOML 修改。
+- 状态：`IN PROGRESS`
+
+## YINSTALL-009 — 删除推荐内存与百分比参数
+
+- 发现：2026-08-10
+- 问题：安装器仍暴露 `--recommend-memory` 和 `--memory-limit`。
+- 需求：删除两个参数和对应生成逻辑，仅保留绝对内存 `--memory-size`。
+- 状态：`IN PROGRESS`

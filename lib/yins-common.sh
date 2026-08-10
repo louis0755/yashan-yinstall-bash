@@ -37,9 +37,9 @@ init_defaults() {
 	YASOM_PORT=""
 	YASAGENT_PORT=""
 	REPLICAT_PORT=""
-	MEMORY_LIMIT=50
+	DB_MODE="yashan"
+	MYSQL_PORT=""
 	MEMORY_SIZE=""
-	RECOMMEND_MEMORY=false
 	STANDBY_JOIN_CMD=""
 	STANDBY_REMOVE_CMD=""
 	YASBOOT_GEN_EXTRA_ARGS=""
@@ -145,17 +145,17 @@ parse_args() {
 			REPLICAT_PORT=${2:?missing value for $1}
 			shift 2
 			;;
-		--memory-limit)
-			MEMORY_LIMIT=${2:?missing value for $1}
-			shift 2
-			;;
 		--memory-size)
 			MEMORY_SIZE=${2:?missing value for $1}
 			shift 2
 			;;
-		--recommend-memory)
-			RECOMMEND_MEMORY=true
-			shift
+		--mode)
+			DB_MODE=${2:?missing value for $1}
+			shift 2
+			;;
+		--mysql-port)
+			MYSQL_PORT=${2:?missing value for $1}
+			shift 2
 			;;
 		--standby-join-cmd)
 			STANDBY_JOIN_CMD=${2:?missing value for $1}
@@ -239,7 +239,11 @@ log() {
 }
 
 die() {
-	log ERROR CLI local "$*"
+	if [[ -n ${LOG_FILE:-} ]]; then
+		log ERROR CLI local "$*"
+	else
+		printf 'yinstall: %s\n' "$*" >&2
+	fi
 	exit 1
 }
 quote() { printf "'%s'" "${1//\'/\'\\\'}"; }
@@ -314,9 +318,13 @@ resolve_database_ports() {
 validate_request() {
 	is_port "${SSH_PORT}" || die "invalid SSH port: ${SSH_PORT}"
 	resolve_database_ports
-	is_percent "${MEMORY_LIMIT}" || die "memory limit must be 1-100"
 	[[ -z ${MEMORY_SIZE} || ${MEMORY_SIZE} =~ ^[1-9][0-9]*([MmGg])?$ ]] || die "memory size must be an integer with optional M or G suffix"
-	[[ ${RECOMMEND_MEMORY} == false || -z ${MEMORY_SIZE} ]] || die "--recommend-memory cannot be combined with --memory-size"
+	[[ ${DB_MODE} == yashan || ${DB_MODE} == mysql ]] || die "--mode must be yashan or mysql"
+	if [[ ${DB_MODE} == mysql ]]; then
+		is_port "${MYSQL_PORT}" || die "--mysql-port is required with --mode mysql"
+	else
+		[[ -z ${MYSQL_PORT} ]] || die "--mysql-port requires --mode mysql"
+	fi
 	is_identifier "${CLUSTER}" || die "invalid cluster name"
 	is_identifier "${OS_USER}" || die "invalid OS user"
 	is_identifier "${OS_GROUP}" || die "invalid OS group"

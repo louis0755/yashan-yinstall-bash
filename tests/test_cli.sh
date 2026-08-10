@@ -41,7 +41,10 @@ assert_failure bash "${ROOT_DIR}/yinstall.sh" standby add --primary 10.0.0.11 --
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --package /missing.tar.gz --db-port 2
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --package /missing.tar.gz --db-port 1703 --yasom-port 1700 --yasagent-port 1702 --replicat-port 1704
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --memory-size 1T
-assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --recommend-memory --memory-size 1G
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --mode mysql
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --mysql-port 3307
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --recommend-memory
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --memory-limit 50
 
 touch "${TMP_DIR}/YashanDB.tar.gz"
 export TEST_MARKER="${TMP_DIR}/marker"
