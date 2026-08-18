@@ -39,6 +39,7 @@ init_defaults() {
 	REPLICAT_PORT=""
 	DB_MODE="yashan"
 	MYSQL_PORT=""
+	USE_NATIVE_TYPE=false
 	MEMORY_SIZE=""
 	STANDBY_JOIN_CMD=""
 	STANDBY_REMOVE_CMD=""
@@ -156,6 +157,10 @@ parse_args() {
 		--mysql-port)
 			MYSQL_PORT=${2:?missing value for $1}
 			shift 2
+			;;
+		--use-native-type)
+			USE_NATIVE_TYPE=true
+			shift
 			;;
 		--standby-join-cmd)
 			STANDBY_JOIN_CMD=${2:?missing value for $1}

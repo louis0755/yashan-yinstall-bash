@@ -35,3 +35,6 @@ yasboot 配置生成和 `hosts.toml` 端口写入。它可独立维护，也可�
 Replicat=`P+1`，并会更新生成的 `hosts.toml`。先使用 `--precheck` 或
 `--dry-run` 进行验证。运行 `tests/test_cli.sh` 和 `tests/test_ports.sh` 执行
 自动化测试。
+
+安装时可使用无值开关 `--use-native-type`，在数据库节点配置中写入
+`USE_NATIVE_TYPE = true`；不指定时保留 yasboot 生成的默认值。
