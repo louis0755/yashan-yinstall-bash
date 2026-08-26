@@ -144,3 +144,6 @@
 
 - 修复远程备库上传使用 `scp -P` 传递 SSH 端口。
 - 备库流程任一步骤失败时立即停止，避免继续使用不完整的安装目录。
+## 0.4.5
+
+- 兼容不支持 `StrictHostKeyChecking=accept-new` 的旧版 OpenSSH，自动降级为兼容模式。

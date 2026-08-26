@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 ssh_args() {
-	SSH_ARGS=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -p "${SSH_PORT}")
+	local host_key_mode=accept-new
+	ssh -o StrictHostKeyChecking=accept-new -G 127.0.0.1 >/dev/null 2>&1 || host_key_mode=no
+	SSH_ARGS=(-o BatchMode=yes -o ConnectTimeout=15 -o "StrictHostKeyChecking=${host_key_mode}" -p "${SSH_PORT}")
 	if [[ -n ${SSH_KEY_PATH} ]]; then
 		SSH_ARGS+=(-i "${SSH_KEY_PATH}")
 	fi
@@ -74,7 +76,9 @@ remote_copy() {
 		log INFO "${step}" "${host}" "package upload skipped by precheck/dry-run"
 		return 0
 	fi
-	local -a scp_args=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -P "${SSH_PORT}")
+	local host_key_mode=accept-new
+	ssh -o StrictHostKeyChecking=accept-new -G 127.0.0.1 >/dev/null 2>&1 || host_key_mode=no
+	local -a scp_args=(-o BatchMode=yes -o ConnectTimeout=15 -o "StrictHostKeyChecking=${host_key_mode}" -P "${SSH_PORT}")
 	if [[ -n ${SSH_KEY_PATH} ]]; then scp_args+=(-i "${SSH_KEY_PATH}"); fi
 	scp "${scp_args[@]}" -- "${source}" "${SSH_USER}@${host}:${target}"
 }
