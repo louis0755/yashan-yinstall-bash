@@ -74,5 +74,7 @@ remote_copy() {
 		log INFO "${step}" "${host}" "package upload skipped by precheck/dry-run"
 		return 0
 	fi
-	scp "${SSH_ARGS[@]}" -- "${source}" "${SSH_USER}@${host}:${target}"
+	local -a scp_args=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -P "${SSH_PORT}")
+	if [[ -n ${SSH_KEY_PATH} ]]; then scp_args+=(-i "${SSH_KEY_PATH}"); fi
+	scp "${scp_args[@]}" -- "${source}" "${SSH_USER}@${host}:${target}"
 }

@@ -16,15 +16,15 @@ run_standby_add() {
 
 standby_add_one() {
 	local host=$1
-	run_os_prepare "${host}"
-	run_step E-010 "${host}" "check standby target" db_precheck "${host}"
-	run_step E-011 "${host}" "upload package" db_upload_package "${host}"
-	run_step E-012 "${host}" "extract package" db_extract_package "${host}"
-	run_step E-013 "${host}" "generate standby configuration" db_generate_config "${host}"
-	run_step E-014 "${host}" "install standby software" db_install_software "${host}"
-	run_step E-015 "${host}" "check primary connectivity" standby_check_connectivity "${host}"
-	run_step E-016 "${host}" "join primary replication" standby_join "${host}"
-	run_step E-017 "${host}" "verify replication" standby_verify "${host}"
+	run_os_prepare "${host}" || return
+	run_step E-010 "${host}" "check standby target" db_precheck "${host}" || return
+	run_step E-011 "${host}" "upload package" db_upload_package "${host}" || return
+	run_step E-012 "${host}" "extract package" db_extract_package "${host}" || return
+	run_step E-013 "${host}" "generate standby configuration" db_generate_config "${host}" || return
+	run_step E-014 "${host}" "install standby software" db_install_software "${host}" || return
+	run_step E-015 "${host}" "check primary connectivity" standby_check_connectivity "${host}" || return
+	run_step E-016 "${host}" "join primary replication" standby_join "${host}" || return
+	run_step E-017 "${host}" "verify replication" standby_verify "${host}" || return
 }
 
 standby_check_primary() {
