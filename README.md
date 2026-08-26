@@ -38,3 +38,6 @@ Replicat=`P+1`，并会更新生成的 `hosts.toml`。先使用 `--precheck` 或
 
 安装时可使用无值开关 `--use-native-type`，在数据库节点配置中写入
 `USE_NATIVE_TYPE = true`；不指定时保留 yasboot 生成的默认值。
+
+可通过 `--character-set CHARSET` 指定字符集，支持 `ASCII`、`ISO88591`、`GBK`、
+`UTF8` 和 `GB18030`；未指定时保留 yasboot 生成的默认值。

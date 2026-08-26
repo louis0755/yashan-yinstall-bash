@@ -133,7 +133,7 @@ host_ip=\$(hostname -I | awk '{print \$1}')
 test -n \"\${host_ip}\"
 test -f ${hosts_q}
 test -f ${cluster_config_q}
-runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_value}") $(quote "${MYSQL_PORT}") $(quote "${USE_NATIVE_TYPE}") <<'PORTS'
+runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_value}") $(quote "${MYSQL_PORT}") $(quote "${USE_NATIVE_TYPE}") $(quote "${CHARACTER_SET}") <<'PORTS'
 set -euo pipefail
 hosts_file=\$1
 cluster_file=\$2
@@ -143,6 +143,7 @@ yasagent_port=\$5
 memory_value=\$6
 mysql_port=\$7
 use_native_type=\$8
+character_set=\$9
 
 set_listen_addr() {
   local section=\$1 address=\$2 temp_file
@@ -317,6 +318,45 @@ set_node_bool() {
   mv -- \"\${temp_file}\" \"\${config_file}\"
 }
 
+set_group_string() {
+  local config_file=\$1 key=\$2 value=\$3 temp_file
+  temp_file=\"\${config_file}.\${key}.\$\$\"
+  awk -v key=\"\${key}\" -v value=\"\${value}\" '
+    function add_value() {
+      if (in_section && !written) print section_indent \"  \" key \" = \\\"\" value \"\\\"\"
+    }
+    /^[[:space:]]*\\[/ {
+      add_value()
+      current = \$0
+      sub(/^[[:space:]]*/, \"\", current)
+      sub(/[[:space:]]*$/, \"\", current)
+      in_section = (current == \"[group.config]\")
+      written = 0
+      if (in_section) {
+        match(\$0, /^[[:space:]]*/)
+        section_indent = substr(\$0, RSTART, RLENGTH)
+        found_section = 1
+      }
+    }
+    in_section && \$0 ~ \"^[[:space:]]*\" key \"[[:space:]]*=\" {
+      match(\$0, /^[[:space:]]*/)
+      print substr(\$0, RSTART, RLENGTH) key \" = \\\"\" value \"\\\"\"
+      written = 1
+      next
+    }
+    { print }
+    END {
+      add_value()
+      if (!found_section) exit 1
+    }
+  ' \"\${config_file}\" >\"\${temp_file}\" || {
+    rm -f -- \"\${temp_file}\"
+    echo \"missing [group.config] in \${config_file}\" >&2
+    exit 1
+  }
+  mv -- \"\${temp_file}\" \"\${config_file}\"
+}
+
 if [[ -n \${memory_value} ]]; then
   set_memory_limit \"\${hosts_file}\" '[[host]]'
   set_memory_limit \"\${cluster_file}\" '[[group.node]]'
@@ -327,6 +367,9 @@ if [[ -n \${mysql_port} ]]; then
 fi
 if [[ \${use_native_type} == true ]]; then
   set_node_bool "\${cluster_file}" USE_NATIVE_TYPE
+fi
+if [[ -n \${character_set} ]]; then
+  set_group_string "\${cluster_file}" CHARACTER_SET "\${character_set}"
 fi
 PORTS
 "

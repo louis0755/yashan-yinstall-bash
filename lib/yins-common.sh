@@ -40,6 +40,7 @@ init_defaults() {
 	DB_MODE="yashan"
 	MYSQL_PORT=""
 	USE_NATIVE_TYPE=false
+	CHARACTER_SET=""
 	MEMORY_SIZE=""
 	STANDBY_JOIN_CMD=""
 	STANDBY_REMOVE_CMD=""
@@ -161,6 +162,10 @@ parse_args() {
 		--use-native-type)
 			USE_NATIVE_TYPE=true
 			shift
+			;;
+		--character-set)
+			CHARACTER_SET=${2:?missing value for $1}
+			shift 2
 			;;
 		--standby-join-cmd)
 			STANDBY_JOIN_CMD=${2:?missing value for $1}
@@ -325,6 +330,13 @@ validate_request() {
 	resolve_database_ports
 	[[ -z ${MEMORY_SIZE} || ${MEMORY_SIZE} =~ ^[1-9][0-9]*([MmGg])?$ ]] || die "memory size must be an integer with optional M or G suffix"
 	[[ ${DB_MODE} == yashan || ${DB_MODE} == mysql ]] || die "--mode must be yashan or mysql"
+	if [[ -n ${CHARACTER_SET} ]]; then
+		CHARACTER_SET=${CHARACTER_SET^^}
+		case ${CHARACTER_SET} in
+		ASCII | ISO88591 | GBK | UTF8 | GB18030) ;;
+		*) die "--character-set must be ASCII, ISO88591, GBK, UTF8, or GB18030" ;;
+		esac
+	fi
 	if [[ ${DB_MODE} == mysql ]]; then
 		is_port "${MYSQL_PORT}" || die "--mysql-port is required with --mode mysql"
 	else

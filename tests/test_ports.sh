@@ -52,6 +52,8 @@ printf '%s\n' \
 	'      LISTEN_ADDR = "127.0.0.1:1687"' >"${EXEC_STAGE}/hosts.toml"
 printf '%s\n' \
 	'[[group]]' \
+	'  [group.config]' \
+	'    CHARACTER_SET = "utf8"' \
 	'  [[group.node]]' \
 	'    mysql_addr = "127.0.0.1:1688"' \
 	'    [group.node.config]' \
@@ -64,7 +66,7 @@ env PATH="${FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install \
 	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1703 \
 	--db-port 1703 --install-path "${TMP_DIR}/yasdb-home" --data-path "${TMP_DIR}/yasdb-data" \
 	--log-path "${TMP_DIR}/yasdb-log" --stage-dir "${EXEC_STAGE}" --memory-size 1G \
-	--mode mysql --mysql-port 3307 --use-native-type --include-steps C-005 --log-dir "${TMP_DIR}/execute-logs"
+	--mode mysql --mysql-port 3307 --use-native-type --character-set GBK --include-steps C-005 --log-dir "${TMP_DIR}/execute-logs"
 
 grep -E 'LISTEN_ADDR = ".*:1701"' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -E 'LISTEN_ADDR = ".*:1702"' "${EXEC_STAGE}/hosts.toml" >/dev/null
@@ -75,6 +77,7 @@ grep -F '    memory_limit = "1024M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -F '      COLUMNAR_BUFFER_SIZE = "256M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -E 'mysql_addr = ".*:3307"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -F 'USE_NATIVE_TYPE = true' "${EXEC_STAGE}/ys1703.toml" >/dev/null
+grep -F 'CHARACTER_SET = "GBK"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 
 LOCAL_SCRIPT_LOG="${TMP_DIR}/local-scripts"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 1' >"${FAKE_BIN}/ssh"

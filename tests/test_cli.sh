@@ -45,6 +45,7 @@ assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /miss
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --mysql-port 3307
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --recommend-memory
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --memory-limit 50
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --character-set LATIN1
 
 touch "${TMP_DIR}/YashanDB.tar.gz"
 export TEST_MARKER="${TMP_DIR}/marker"

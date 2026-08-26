@@ -36,7 +36,8 @@ Global options: --local (run on this host), -t/--target, -u/--ssh-user,
 Database options: --package, --db-admin-password, --cluster, --os-user,
   --os-group, --install-path, --data-path, --log-path, --stage-dir,
   --db-port, --yasom-port, --yasagent-port, --replicat-port, --begin-port,
-  --mode yashan|mysql, --mysql-port PORT, --use-native-type, --yasboot-gen-extra-args,
+  --mode yashan|mysql, --mysql-port PORT, --use-native-type, --character-set CHARSET,
+  --yasboot-gen-extra-args,
   --memory-size (write an exact integer M by default, or G),
   --yasboot-deploy-extra-args.
 
