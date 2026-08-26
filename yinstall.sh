@@ -28,7 +28,7 @@ Usage:
   yinstall.sh clean standby --primary HOST -t HOST --confirm [--purge-data] [options]
   yinstall.sh clean all --primary HOST --standbys HOST[,HOST...] --confirm [--purge-data] [options]
 
-Global options: --local (run on this host), -t/--target, -u/--ssh-user,
+Global options: --local (run on this host), -t/--target, --host-ip IP, -u/--ssh-user,
   -i/--ssh-key-path, -p/--ssh-port,
   --precheck, --dry-run, --include-steps, --exclude-steps, --force, --log-dir,
   --generate-script FILE (local os/db steps; write commands for manual execution).

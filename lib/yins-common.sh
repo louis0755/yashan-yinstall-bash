@@ -24,6 +24,7 @@ init_defaults() {
 	PACKAGE=""
 	DB_ADMIN_PASSWORD=""
 	CLUSTER="yashandb"
+	HOST_IP=""
 	OS_USER="yashan"
 	OS_GROUP="yashan"
 	INSTALL_PATH="/data/yashan/yasdb_home"
@@ -100,6 +101,10 @@ parse_args() {
 			;;
 		--cluster)
 			CLUSTER=${2:?missing value for $1}
+			shift 2
+			;;
+		--host-ip | --ip)
+			HOST_IP=${2:?missing value for $1}
 			shift 2
 			;;
 		--os-user)
@@ -261,6 +266,14 @@ is_identifier() { [[ $1 =~ ^[A-Za-z][A-Za-z0-9_-]{0,63}$ ]]; }
 is_port() { [[ $1 =~ ^[1-9][0-9]*$ ]] && (($1 >= 1 && $1 <= 65535)); }
 is_percent() { [[ $1 =~ ^[0-9]+$ ]] && (($1 >= 1 && $1 <= 100)); }
 is_host() { [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,253}$ ]]; }
+is_ipv4() {
+	local IFS=. octet
+	read -r -a octets <<<"$1"
+	(( ${#octets[@]} == 4 )) || return 1
+	for octet in "${octets[@]}"; do
+		[[ ${octet} =~ ^[0-9]{1,3}$ ]] && ((10#${octet} <= 255)) || return 1
+	done
+}
 is_absolute_path() { [[ $1 == /* && $1 != / && $1 != *".."* ]]; }
 
 contains_step() { [[ ",$1," == *",$2,"* ]]; }
@@ -327,6 +340,9 @@ resolve_database_ports() {
 
 validate_request() {
 	is_port "${SSH_PORT}" || die "invalid SSH port: ${SSH_PORT}"
+	if [[ -n ${HOST_IP} ]]; then
+		is_ipv4 "${HOST_IP}" || die "--host-ip must be a valid IPv4 address"
+	fi
 	resolve_database_ports
 	[[ -z ${MEMORY_SIZE} || ${MEMORY_SIZE} =~ ^[1-9][0-9]*([MmGg])?$ ]] || die "memory size must be an integer with optional M or G suffix"
 	[[ ${DB_MODE} == yashan || ${DB_MODE} == mysql ]] || die "--mode must be yashan or mysql"

@@ -87,7 +87,7 @@ validate_extra_args() {
 }
 
 db_generate_config() {
-	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args mode_args force_arg
+	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment
 	validate_extra_args "${YASBOOT_GEN_EXTRA_ARGS}" "--yasboot-gen-extra-args"
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
@@ -106,9 +106,11 @@ db_generate_config() {
 	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
+	host_ip_assignment='host_ip=$(hostname -I | awk '\''{print $1}'\'')'
+	[[ -z ${HOST_IP} ]] || host_ip_assignment="host_ip=$(quote "${HOST_IP}")"
 	remote_exec C-004 "${host}" true "
 set -e
-host_ip=\$(hostname -I | awk '{print \$1}')
+${host_ip_assignment}
 test -n \"\${host_ip}\"
 cd ${stage_q}
 runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} --node 1 ${YASBOOT_GEN_EXTRA_ARGS}
@@ -117,7 +119,7 @@ test -f ${stage_q}/${CLUSTER}.toml
 }
 
 db_configure_ports() {
-	local host=$1 stage_q hosts_q cluster_config_q user_q memory_value
+	local host=$1 stage_q hosts_q cluster_config_q user_q memory_value host_ip_assignment
 	stage_q=$(quote "${STAGE_DIR}")
 	hosts_q=$(quote "${STAGE_DIR}/hosts.toml")
 	cluster_config_q=$(quote "${STAGE_DIR}/${CLUSTER}.toml")
@@ -127,9 +129,11 @@ db_configure_ports() {
 		memory_value=${MEMORY_SIZE%[MmGg]}
 		case ${MEMORY_SIZE} in *[Gg]) memory_value=$((memory_value * 1024))M ;; *) memory_value=${memory_value}M ;; esac
 	fi
+	host_ip_assignment='host_ip=$(hostname -I | awk '\''{print $1}'\'')'
+	[[ -z ${HOST_IP} ]] || host_ip_assignment="host_ip=$(quote "${HOST_IP}")"
 	remote_exec C-005 "${host}" true "
 set -e
-host_ip=\$(hostname -I | awk '{print \$1}')
+${host_ip_assignment}
 test -n \"\${host_ip}\"
 test -f ${hosts_q}
 test -f ${cluster_config_q}
