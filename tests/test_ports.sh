@@ -32,6 +32,17 @@ fi
 
 : >"${SCRIPT_LOG}"
 env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --standbys 10.0.0.12 --host-ip 10.0.0.11 \
+	--package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1703 \
+	--db-port 1711 --install-path /data/yashan/ys1711/yasdb-home \
+	--data-path /data/yashan/ys1711/yasdb-data --log-path /data/yashan/ys1711/yasdb-log \
+	--stage-dir /data/yashan/ys1711/install --include-steps B-000,C-004 --log-dir "${TMP_DIR}/ha-logs"
+grep -F -- '--ip 10.0.0.11,10.0.0.12' "${SCRIPT_LOG}" >/dev/null
+grep -F -- '--node 2 --standby-node 1' "${SCRIPT_LOG}" >/dev/null
+grep -F -- 'BatchMode=yes' "${SCRIPT_LOG}" >/dev/null
+
+: >"${SCRIPT_LOG}"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
 	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1703 \
 	--db-port 1703 --install-path /data/yashan/ys1703/yasdb-home \
 	--data-path /data/yashan/ys1703/yasdb-data --log-path /data/yashan/ys1703/yasdb-log \

@@ -66,4 +66,9 @@ chmod +x "${LOCAL_FAKE_BIN}/ssh" "${LOCAL_FAKE_BIN}/scp"
 assert_success env PATH="${LOCAL_FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install --local \
 	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703 --include-steps C-004 --dry-run --log-dir "${TMP_DIR}/local-logs"
 
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --standbys 10.0.0.12 \
+	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --standbys 10.0.0.12 \
+	--host-ip 10.0.0.11 --package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703
+
 echo "test_cli.sh: passed"

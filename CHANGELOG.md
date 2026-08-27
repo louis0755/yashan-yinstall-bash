@@ -147,3 +147,7 @@
 ## 0.4.5
 
 - 兼容不支持 `StrictHostKeyChecking=accept-new` 的旧版 OpenSSH，自动降级为兼容模式。
+## 0.4.6
+
+- 支持 `db install --standbys` 在一次 yasboot 配置生成中创建主备节点。
+- 无密码模式下检查执行主机到备机的免密 SSH 连接。

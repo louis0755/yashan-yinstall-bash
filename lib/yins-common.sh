@@ -400,6 +400,11 @@ validate_request() {
 		[[ -n ${STANDBY_REMOVE_CMD} ]] || die "--standby-remove-cmd is required"
 		;;
 	esac
+	if [[ ${COMMAND}:${SUBCOMMAND} == db:install && -n ${STANDBYS} ]]; then
+		[[ ${LOCAL} == false ]] || die "--standbys requires a remote primary target"
+		[[ -n ${HOST_IP} ]] || die "--host-ip is required with --standbys so yasboot can generate both host addresses"
+		validate_host_list "${STANDBYS}"
+	fi
 	if [[ ${COMMAND}:${SUBCOMMAND} == db:install || ${COMMAND}:${SUBCOMMAND} == standby:add ]]; then
 		[[ -f ${PACKAGE} ]] || die "--package must name a readable local file"
 		[[ -n ${DB_ADMIN_PASSWORD} ]] || die "--db-admin-password is required"

@@ -2,7 +2,15 @@
 
 run_db_install() {
 	local host=$1
+	if [[ -n ${STANDBYS} ]]; then
+		run_step B-000 "${host}" "check primary-to-standby passwordless SSH" db_check_standby_ssh "${host}"
+	fi
 	run_os_prepare "${host}"
+	if [[ -n ${STANDBYS} ]]; then
+		local standby
+		IFS=',' read -r -a standby_hosts <<<"${STANDBYS}"
+		for standby in "${standby_hosts[@]}"; do run_os_prepare "${standby}"; done
+	fi
 	run_step C-001 "${host}" "check package and target state" db_precheck "${host}"
 	run_step C-002 "${host}" "upload package" db_upload_package "${host}"
 	run_step C-003 "${host}" "extract package" db_extract_package "${host}"
@@ -37,6 +45,19 @@ for port in ${ports_q}; do
     echo \"managed port \${port} is already listening\" >&2
     exit 1
   fi
+done
+"
+}
+
+db_check_standby_ssh() {
+	local host=$1 standby_q
+	standby_q=$(quote "${STANDBYS}")
+	remote_check B-000 "${host}" "
+set -e
+command -v ssh >/dev/null
+IFS=',' read -r -a standby_hosts <<<${standby_q}
+for standby in "\${standby_hosts[@]}"; do
+  ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -p ${SSH_PORT} ${SSH_USER}@"\${standby}" true
 done
 "
 }
@@ -87,25 +108,29 @@ validate_extra_args() {
 }
 
 db_generate_config() {
-	local host=$1 stage_q yasboot_q cluster_q user_q password_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment
+	local host=$1 stage_q yasboot_q cluster_q user_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment ip_args node_args
 	validate_extra_args "${YASBOOT_GEN_EXTRA_ARGS}" "--yasboot-gen-extra-args"
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
 	cluster_q=$(quote "${CLUSTER}")
 	user_q=$(quote "${OS_USER}")
-	password_q=$(quote "${DB_ADMIN_PASSWORD}")
 	install_q=$(quote "${INSTALL_PATH}")
 	data_q=$(quote "${DATA_PATH}")
 	log_q=$(quote "${LOG_PATH}")
-	if [[ ${LOCAL} == true ]]; then
-		auth_args="-N"
-	else
-		auth_args="-p ${password_q}"
-	fi
+	# package generation connects to every host in the generated topology. The
+	# installer itself already requires BatchMode SSH, so yasboot must use the
+	# passwordless mode as well; DB_ADMIN_PASSWORD is only for cluster deploy.
+	auth_args="-N"
 	mode_args=""
 	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
+	ip_args='"\${host_ip}"'
+	node_args="--node 1"
+	if [[ -n ${STANDBYS} ]]; then
+		ip_args="${HOST_IP},${STANDBYS}"
+		node_args="--node $((1 + $(tr ',' '\\n' <<<"${STANDBYS}" | wc -l))) --standby-node $(tr ',' '\\n' <<<"${STANDBYS}" | wc -l)"
+	fi
 	host_ip_assignment='host_ip=$(hostname -I | awk '\''{print $1}'\'')'
 	[[ -z ${HOST_IP} ]] || host_ip_assignment="host_ip=$(quote "${HOST_IP}")"
 	remote_exec C-004 "${host}" true "
@@ -113,7 +138,7 @@ set -e
 ${host_ip_assignment}
 test -n \"\${host_ip}\"
 cd ${stage_q}
-runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} --node 1 ${YASBOOT_GEN_EXTRA_ARGS}
+runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip ${ip_args} --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} ${node_args} ${YASBOOT_GEN_EXTRA_ARGS}
 test -f ${stage_q}/${CLUSTER}.toml
 "
 }

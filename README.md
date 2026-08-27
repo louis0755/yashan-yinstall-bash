@@ -31,6 +31,18 @@ yasboot 配置生成和 `hosts.toml` 端口写入。它可独立维护，也可�
   --db-admin-password '替换为实际密码'
 ```
 
+一主一备可在一次生成中指定：
+
+```bash
+./yinstall.sh db install --target 192.168.23.4 --host-ip 192.168.23.4 \
+  --standbys 192.168.23.13 --package ./YashanDB.tar.gz \
+  --db-admin-password '替换为实际密码' --cluster ys18003 --db-port 18003
+```
+
+执行主机必须能以 `SSH_USER` 免密连接每台备机。安装器会先检查该连接，然后使用
+`yasboot package se gen --no-password --ip 192.168.23.4,192.168.23.13 --node 2
+--standby-node 1` 一次生成主备 TOML；不会执行后置 `cluster join`。
+
 `--db-port P` 管理连续端口：Yasom=`P-2`、Yasagent=`P-1`、YashanDB=`P`、
 Replicat=`P+1`，并会更新生成的 `hosts.toml`。先使用 `--precheck` 或
 `--dry-run` 进行验证。运行 `tests/test_cli.sh` 和 `tests/test_ports.sh` 执行

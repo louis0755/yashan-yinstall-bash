@@ -22,7 +22,7 @@ usage() {
 	cat <<'EOF'
 Usage:
   yinstall.sh os prepare (--local | -t HOST) [options]
-  yinstall.sh db install (--local | -t HOST) --package FILE --db-admin-password PASSWORD [options]
+  yinstall.sh db install (--local | -t HOST) --package FILE --db-admin-password PASSWORD [--standbys HOST[,HOST...]] [options]
   yinstall.sh standby add --primary HOST --standbys HOST[,HOST...] --package FILE \
     --db-admin-password PASSWORD --standby-join-cmd COMMAND [options]
   yinstall.sh clean standby --primary HOST -t HOST --confirm [--purge-data] [options]
@@ -33,7 +33,7 @@ Global options: --local (run on this host), -t/--target, --host-ip IP, -u/--ssh-
   --precheck, --dry-run, --include-steps, --exclude-steps, --force, --log-dir,
   --generate-script FILE (local os/db steps; write commands for manual execution).
 
-Database options: --package, --db-admin-password, --cluster, --os-user,
+Database options: --package, --db-admin-password, --cluster, --standbys HOST[,HOST...], --os-user,
   --os-group, --install-path, --data-path, --log-path, --stage-dir,
   --db-port, --yasom-port, --yasagent-port, --replicat-port, --begin-port,
   --mode yashan|mysql, --mysql-port PORT, --use-native-type, --character-set CHARSET,
