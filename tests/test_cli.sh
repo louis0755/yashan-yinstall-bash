@@ -71,4 +71,39 @@ assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --standbys
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --standbys 10.0.0.12 \
 	--host-ip 10.0.0.11 --package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703
 
+# Safe-path guard: a bare managed root must be rejected, a cluster-scoped path accepted.
+SAFE_TMP="$(mktemp -d)"
+trap 'rm -rf -- "${TMP_DIR}" "${SAFE_TMP}"' EXIT
+mkdir -p -- "${SAFE_TMP}/data/yashan/ys1703"
+mkdir -p -- "${SAFE_TMP}/data/yashan/ys1703/install/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${SAFE_TMP}/data/yashan/ys1703/install/bin/yasboot"
+chmod +x "${SAFE_TMP}/data/yashan/ys1703/install/bin/yasboot"
+touch "${SAFE_TMP}/data/yashan/ys1703/install/hosts.toml"
+# A bare /data/yashan install path must be refused.
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local \
+	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703 \
+	--install-path /data/yashan --data-path /data/yashan --log-path /data/yashan \
+	--stage-dir /data/yashan --dry-run --log-dir "${TMP_DIR}/safe-logs"
+# A cluster-scoped path must be accepted (dry-run only).
+assert_success bash "${ROOT_DIR}/yinstall.sh" db install --local \
+	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --cluster ys1703 --db-port 1703 \
+	--install-path "${SAFE_TMP}/data/yashan/ys1703/yasdb-home" \
+	--data-path "${SAFE_TMP}/data/yashan/ys1703/yasdb-data" \
+	--log-path "${SAFE_TMP}/data/yashan/ys1703/yasdb-log" \
+	--stage-dir "${SAFE_TMP}/data/yashan/ys1703/install" \
+	--include-steps C-004 --dry-run --log-dir "${TMP_DIR}/safe-logs"
+
+# Password must be accepted from the environment and never echoed into the log.
+assert_success env YINSTALL_SYS_PASSWORD='secr3t-Pass' bash "${ROOT_DIR}/yinstall.sh" db install --local \
+	--package "${TMP_DIR}/YashanDB.tar.gz" --db-port 1703 --include-steps C-004 \
+	--install-path "${SAFE_TMP}/data/yashan/ys1703/yasdb-home" \
+	--data-path "${SAFE_TMP}/data/yashan/ys1703/yasdb-data" \
+	--log-path "${SAFE_TMP}/data/yashan/ys1703/yasdb-log" \
+	--stage-dir "${SAFE_TMP}/data/yashan/ys1703/install" \
+	--dry-run --log-dir "${TMP_DIR}/env-pwd-logs"
+if grep -rF -- 'secr3t-Pass' "${TMP_DIR}/env-pwd-logs" >/dev/null 2>&1; then
+	echo 'password was echoed into the log' >&2
+	exit 1
+fi
+
 echo "test_cli.sh: passed"
