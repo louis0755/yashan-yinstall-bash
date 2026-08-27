@@ -9,7 +9,10 @@ run_db_install() {
 	if [[ -n ${STANDBYS} ]]; then
 		local standby
 		IFS=',' read -r -a standby_hosts <<<"${STANDBYS}"
-		for standby in "${standby_hosts[@]}"; do run_os_prepare "${standby}"; done
+		for standby in "${standby_hosts[@]}"; do
+			run_os_prepare "${standby}"
+			run_step C-000 "${standby}" "check standby port availability" db_precheck_ports "${standby}"
+		done
 	fi
 	run_step C-001 "${host}" "check package and target state" db_precheck "${host}"
 	run_step C-002 "${host}" "upload package" db_upload_package "${host}"
@@ -40,6 +43,23 @@ if [ -e ${stage_q}/${CLUSTER}.toml ] && [ ${FORCE} != true ]; then
   echo 'existing managed configuration found; use clean or --force after review' >&2
   exit 1
 fi
+for port in ${ports_q}; do
+  if ss -ltn 2>/dev/null | awk '{print \$4}' | grep -Eq "[:.]\${port}$"; then
+    echo \"managed port \${port} is already listening\" >&2
+    exit 1
+  fi
+done
+"
+}
+
+# Standbys have no managed TOML yet, so only assert that the managed port group
+# is free on each standby before deployment.
+db_precheck_ports() {
+	local host=$1 ports_q
+	ports_q="$(quote "${YASOM_PORT}") $(quote "${YASAGENT_PORT}") $(quote "${DB_PORT}") $(quote "${REPLICAT_PORT}")"
+	[[ -z ${MYSQL_PORT} ]] || ports_q+=" $(quote "${MYSQL_PORT}")"
+	remote_check C-000 "${host}" "
+set -e
 for port in ${ports_q}; do
   if ss -ltn 2>/dev/null | awk '{print \$4}' | grep -Eq "[:.]\${port}$"; then
     echo \"managed port \${port} is already listening\" >&2
