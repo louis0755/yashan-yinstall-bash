@@ -407,7 +407,10 @@ validate_request() {
 	fi
 	if [[ ${COMMAND}:${SUBCOMMAND} == db:install || ${COMMAND}:${SUBCOMMAND} == standby:add ]]; then
 		[[ -f ${PACKAGE} ]] || die "--package must name a readable local file"
-		[[ -n ${DB_ADMIN_PASSWORD} ]] || die "--db-admin-password is required"
+		# Prefer the caller-provided password; fall back to the environment so
+		# wrappers can avoid placing the secret on the process command line.
+		[[ -n ${DB_ADMIN_PASSWORD} ]] || DB_ADMIN_PASSWORD=${YINSTALL_SYS_PASSWORD:-}
+		[[ -n ${DB_ADMIN_PASSWORD} ]] || die "--db-admin-password or YINSTALL_SYS_PASSWORD is required"
 	fi
 	if [[ ${COMMAND} == clean && ${PRECHECK} != true && ${DRY_RUN} != true && ${CONFIRM} != true ]]; then
 		die "cleanup requires --confirm"
@@ -418,5 +421,9 @@ validate_request() {
 }
 
 safe_managed_path() {
+	# The trailing /* only matches direct children, so bare parents such as
+	# /data/yashan or /home/yashan are rejected and cleanup can never rm -rf a
+	# shared root. Accept the documented managed prefixes and the cluster service
+	# file.
 	case "$1" in /data/yashan/* | /home/yashan/* | /etc/systemd/system/yashandb-*) return 0 ;; *) return 1 ;; esac
 }
