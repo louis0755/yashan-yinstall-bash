@@ -21,7 +21,11 @@ run_db_install() {
 	run_step C-005 "${host}" "configure managed service ports" db_configure_ports "${host}"
 	run_step C-006 "${host}" "install YashanDB software" db_install_software "${host}"
 	run_step C-007 "${host}" "deploy standalone database" db_deploy "${host}"
-	run_step C-008 "${host}" "verify standalone database" db_verify "${host}"
+	if [[ ${PRECHECK} == true || ${DRY_RUN} == true ]]; then
+		log INFO C-008 "${host}" "skipped by precheck/dry-run; database is not deployed"
+	else
+		run_step C-008 "${host}" "verify standalone database" db_verify "${host}"
+	fi
 }
 
 remote_package_path() {
@@ -145,7 +149,9 @@ db_generate_config() {
 	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
-	ip_args='"\${host_ip}"'
+	# The $ must be literal in this local value so the remote shell expands the
+	# host_ip variable; a backslash here would pass "${host_ip}" verbatim to yasboot.
+	ip_args='"${host_ip}"'
 	node_args="--node 1"
 	if [[ -n ${STANDBYS} ]]; then
 		ip_args="${HOST_IP},${STANDBYS}"

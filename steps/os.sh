@@ -73,6 +73,20 @@ os_verify() {
 	user_q=$(quote "${OS_USER}")
 	install_q=$(quote "${INSTALL_PATH}")
 	data_q=$(quote "${DATA_PATH}")
+	if [[ ${PRECHECK} == true || ${DRY_RUN} == true ]]; then
+		local install_root_q data_root_q
+		install_root_q=$(quote "$(dirname -- "$(dirname -- "${INSTALL_PATH}")")")
+		data_root_q=$(quote "$(dirname -- "$(dirname -- "${DATA_PATH}")")")
+		remote_check B-004 "${host}" "
+set -e
+id ${user_q} >/dev/null
+test -d ${install_root_q}
+test -d ${data_root_q}
+sudo -n test -w ${install_root_q}
+sudo -n test -w ${data_root_q}
+"
+		return
+	fi
 	remote_check B-004 "${host}" "
 set -e
 id ${user_q} >/dev/null
