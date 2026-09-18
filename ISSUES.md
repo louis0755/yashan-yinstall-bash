@@ -85,3 +85,17 @@
 - 需求：删除两个参数和对应生成逻辑，仅保留绝对内存 `--memory-size`。
 - 状态：`FIXED`
 - 修复版本：`0.4.0`
+
+## YINSTALL-010 — 主备生成的 hosts.toml 中备机 yasagent LISTEN_ADDR 使用主库 IP
+
+- 发现：2026-09-17
+- GitHub：[louis0755/yashan-yinstall-bash#10](https://github.com/louis0755/yashan-yinstall-bash/issues/10)
+- 错误信息：`listen tcp 192.168.23.4:19208: bind: cannot assign requested address`、`YAS-00415 failed to create listener, host: 192.168.23.13:19210`、`task completed, status: CANCELED`。
+- 现象：`myas create reltest-ha 23.4.14.105 --target 192.168.23.4 --host-ip 192.168.23.4 --standbys 192.168.23.13 --db-port 19209` 时，备机 `192.168.23.13` 的 yasagent 尝试绑定主库地址 `192.168.23.4:19208` 而失败，主备部署任务被取消。
+- 原因：`yasboot package se gen --ip 192.168.23.4,192.168.23.13 --node 2 --standby-node 1` 生成的 `hosts.toml` 中，`host0002` 的 `[host.yasagent.config] LISTEN_ADDR` 被写成主库 IP；同目录 `ys19209.toml` 的两个节点地址是正确的。
+- 影响：一主一备一次性部署无法成功；失败后主备两侧残留进程、目录和 yasboot 环境，且远程目标登记无法用 `myas delete` 清理（yashan-myas#22）。
+- 状态：`FIXED`
+- 排期：`0.4.7`
+- 修复版本：`0.4.7`
+- 修复：生成或后处理 `hosts.toml` 时按每个 `[[host]]` 的 `ip` 写入该节点自己的 yasagent `LISTEN_ADDR`；补 CLI 测试断言双节点各自 IP；在 `.4 → .13` 复测完整主备部署与角色/复制验证。
+- 验证：`steps/host-addrs.awk` + `tests/test_cli.sh` 双节点夹具通过，缺失 `ip` 时失败；真实主机 `.4 → .13` 的主备复测待 0.4.7 组合包部署后执行。

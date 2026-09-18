@@ -170,11 +170,17 @@ test -f ${stage_q}/${CLUSTER}.toml
 }
 
 db_configure_ports() {
-	local host=$1 stage_q hosts_q cluster_config_q user_q memory_value host_ip_assignment
+	local host=$1 stage_q hosts_q cluster_config_q user_q memory_value host_ip_assignment host_addr_awk
 	stage_q=$(quote "${STAGE_DIR}")
 	hosts_q=$(quote "${STAGE_DIR}/hosts.toml")
 	cluster_config_q=$(quote "${STAGE_DIR}/${CLUSTER}.toml")
 	user_q=$(quote "${OS_USER}")
+	# yasboot package se gen writes the first host's ip into every host block; the
+	# standby yasagent then binds an address it does not own. The awk program below
+	# rewrites each [[host]] block with its own ip (see YINSTALL-010).
+	host_addr_awk=$(<"${ROOT_DIR}/steps/host-addrs.awk")
+	[[ ${host_addr_awk} != *"'"* ]] ||
+		die "steps/host-addrs.awk must not contain single quotes: it is spliced into a single-quoted shell string"
 	memory_value=""
 	if [[ -n ${MEMORY_SIZE} ]]; then
 		memory_value=${MEMORY_SIZE%[MmGg]}
@@ -228,7 +234,18 @@ set_listen_addr() {
 }
 
 set_listen_addr '[om.config]' \"\${host_ip}:\${yasom_port}\"
-set_listen_addr '[host.yasagent.config]' \"\${host_ip}:\${yasagent_port}\"
+
+set_host_yasagent_addrs() {
+  local port=\$1 temp_file=\${hosts_file}.hosts.\$\$
+  awk -v port=\"\${port}\" '${host_addr_awk}' \"\${hosts_file}\" >\"\${temp_file}\" || {
+    rm -f -- \"\${temp_file}\"
+    echo \"failed to rewrite per-host yasagent LISTEN_ADDR\" >&2
+    exit 1
+  }
+  mv -- \"\${temp_file}\" \"\${hosts_file}\"
+}
+
+set_host_yasagent_addrs \"\${yasagent_port}\"
 
 set_memory_limit() {
   local config_file=\$1 section=\$2 temp_file

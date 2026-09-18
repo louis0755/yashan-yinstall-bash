@@ -106,4 +106,40 @@ if grep -rF -- 'secr3t-Pass' "${TMP_DIR}/env-pwd-logs" >/dev/null 2>&1; then
 	exit 1
 fi
 
+# YINSTALL-010: every [[host]] keeps its own yasagent LISTEN_ADDR.
+ADDR_FIXTURE="${TMP_DIR}/hosts-two-hosts.toml"
+printf '%s\n' \
+	'[om]' \
+	'  hostid = "host0001"' \
+	'  [om.config]' \
+	'    LISTEN_ADDR = "10.0.0.11:1701"' \
+	'' \
+	'[[host]]' \
+	'  hostid = "host0001"' \
+	'  ip = "10.0.0.11"' \
+	'  [host.yasagent]' \
+	'    [host.yasagent.config]' \
+	'      LISTEN_ADDR = "10.0.0.11:1702"' \
+	'' \
+	'[[host]]' \
+	'  hostid = "host0002"' \
+	'  ip = "10.0.0.12"' \
+	'  [host.yasagent]' \
+	'    [host.yasagent.config]' \
+	'      LISTEN_ADDR = "10.0.0.11:1702"' >"${ADDR_FIXTURE}"
+awk -v port=1702 -f "${ROOT_DIR}/steps/host-addrs.awk" "${ADDR_FIXTURE}" >"${TMP_DIR}/hosts-fixed.toml"
+test "$(grep -cF 'LISTEN_ADDR = "10.0.0.11:1702"' "${TMP_DIR}/hosts-fixed.toml")" = 1
+test "$(grep -cF 'LISTEN_ADDR = "10.0.0.12:1702"' "${TMP_DIR}/hosts-fixed.toml")" = 1
+test "$(grep -cF 'LISTEN_ADDR = "10.0.0.11:1701"' "${TMP_DIR}/hosts-fixed.toml")" = 1
+
+# A host entry without an ip must fail instead of silently keeping a wrong address.
+ADDR_BROKEN="${TMP_DIR}/hosts-missing-ip.toml"
+printf '%s\n' \
+	'[[host]]' \
+	'  hostid = "host0002"' \
+	'  [host.yasagent]' \
+	'    [host.yasagent.config]' \
+	'      LISTEN_ADDR = "10.0.0.11:1702"' >"${ADDR_BROKEN}"
+assert_failure awk -v port=1702 -f "${ROOT_DIR}/steps/host-addrs.awk" "${ADDR_BROKEN}"
+
 echo "test_cli.sh: passed"

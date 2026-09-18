@@ -24,7 +24,8 @@ env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}
 grep -F -- '--begin-port 1703' "${SCRIPT_LOG}" >/dev/null
 grep -F -- '1701 1702' "${SCRIPT_LOG}" >/dev/null
 grep -F -- "set_listen_addr '[om.config]'" "${SCRIPT_LOG}" >/dev/null
-grep -F -- "set_listen_addr '[host.yasagent.config]'" "${SCRIPT_LOG}" >/dev/null
+grep -F -- 'set_host_yasagent_addrs' "${SCRIPT_LOG}" >/dev/null
+grep -F -- 'host-addrs.awk' "${SCRIPT_LOG}" >/dev/null
 if grep -F -- '-m mysql' "${SCRIPT_LOG}" >/dev/null; then
 	echo 'default generation unexpectedly enabled MySQL mode' >&2
 	exit 1
@@ -58,6 +59,14 @@ printf '%s\n' \
 	'  [om.config]' \
 	'    LISTEN_ADDR = "127.0.0.1:1686"' \
 	'[[host]]' \
+	'  hostid = "host0001"' \
+	'  ip = "127.0.0.1"' \
+	'  [host.yasagent]' \
+	'    [host.yasagent.config]' \
+	'      LISTEN_ADDR = "127.0.0.1:1687"' \
+	'[[host]]' \
+	'  hostid = "host0002"' \
+	'  ip = "127.0.0.2"' \
 	'  [host.yasagent]' \
 	'    [host.yasagent.config]' \
 	'      LISTEN_ADDR = "127.0.0.1:1687"' >"${EXEC_STAGE}/hosts.toml"
@@ -81,6 +90,8 @@ env PATH="${FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install \
 
 grep -E 'LISTEN_ADDR = ".*:1701"' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -E 'LISTEN_ADDR = ".*:1702"' "${EXEC_STAGE}/hosts.toml" >/dev/null
+test "$(grep -cF 'LISTEN_ADDR = "127.0.0.1:1702"' "${EXEC_STAGE}/hosts.toml")" = 1
+test "$(grep -cF 'LISTEN_ADDR = "127.0.0.2:1702"' "${EXEC_STAGE}/hosts.toml")" = 1
 grep -F '    LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '      LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '  memory_limit = "1024M"' "${EXEC_STAGE}/hosts.toml" >/dev/null

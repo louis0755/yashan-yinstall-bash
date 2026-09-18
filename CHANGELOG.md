@@ -1,5 +1,12 @@
 # 变更记录
 
+## 0.4.7 - 2026-09-18
+
+### 修复
+
+- 主备部署时按每个 `[[host]]` 的 `ip` 重写 `hosts.toml` 中该节点自己的 `[host.yasagent.config] LISTEN_ADDR`；此前 `yasboot package se gen` 会把第一个 host 的 IP 写进所有 host 块，导致备机 yasagent 绑定不属于自己的地址而失败（YINSTALL-010）。
+- 新增 `steps/host-addrs.awk` 与对应 CLI 测试：双节点夹具断言两台主机各自使用自己的地址，缺失 `ip` 时明确失败而不是保留错误地址。
+
 ## 0.4.6 - 2026-08-27
 
 ### 新增
