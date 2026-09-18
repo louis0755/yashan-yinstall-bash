@@ -18,7 +18,10 @@ init_defaults() {
 	PURGE_DATA=false
 	INCLUDE_STEPS=""
 	EXCLUDE_STEPS=""
-	LOG_DIR="./logs"
+	# Keep runtime logs inside the installer tree instead of the caller's
+	# working directory, so invoking yinstall from an unrelated directory
+	# does not create stray logs there.
+	LOG_DIR="${ROOT_DIR:-.}/logs"
 	GENERATE_SCRIPT=""
 	SUDO_BIN="${YINSTALL_SUDO_BIN:-/usr/bin/sudo}"
 	PACKAGE=""
