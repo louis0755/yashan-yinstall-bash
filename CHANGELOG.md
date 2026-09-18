@@ -1,5 +1,13 @@
 # 变更记录
 
+## 0.4.8 - 2026-09-18
+
+### 修复
+
+- `--memory-size` 现在真正下发到数据库参数：配置生成改为按目标主机内存把绝对大小换算成百分比，并传递 `--recommend-param --memory-limit <百分比>`，由 yasboot 计算内存池大小；此前只写 TOML 的 `memory_limit`，数据库实际仍是默认池子（合计约 2.78G）。`COLUMNAR_BUFFER_SIZE` 等既有处理不变（YINSTALL-011）。
+- 未指定 `--memory-size` 时不启用推荐参数，保持原有默认行为。
+- `tests/test_ports.sh` 增加两条断言：无内存参数时生成命令不得出现 `--recommend-param`；`--memory-size 10G` 时必须出现 `--recommend-param --memory-limit ${memory_percent}` 且百分比按 `10240M` 计算。
+
 ## 0.4.7 - 2026-09-18
 
 ### 修复

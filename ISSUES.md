@@ -99,3 +99,20 @@
 - 修复版本：`0.4.7`
 - 修复：生成或后处理 `hosts.toml` 时按每个 `[[host]]` 的 `ip` 写入该节点自己的 yasagent `LISTEN_ADDR`；补 CLI 测试断言双节点各自 IP；在 `.4 → .13` 复测完整主备部署与角色/复制验证。
 - 验证：`steps/host-addrs.awk` + `tests/test_cli.sh` 双节点夹具通过，缺失 `ip` 时失败；真实主机 `.4 → .13` 的主备复测待 0.4.7 组合包部署后执行。
+
+## YINSTALL-011 — `--memory-size` 未生效：数据库仍是默认内存池
+
+- 发现：2026-09-18
+- GitHub：[louis0755/yashan-yinstall-bash#11](https://github.com/louis0755/yashan-yinstall-bash/issues/11)
+- 现象：`myas create test-2356100 23.5.6.100 --db-port 1907 --memory-size 10G` 创建成功后，数据库内
+  `select dbms_param.show_memory_limit() from dual` 显示 `memory limit 2.78372G`（默认池子之和），
+  同机 `--memory-size 100G` 的实例同样是 `2.78187G`。
+- 原因：0.3.x/0.4.x 只把绝对值写入 `hosts.toml` 和集群 TOML 的 `memory_limit`，生成命令不再传
+  `--recommend-param`；yasboot 只在启用推荐参数时才计算数据库内存池，因此参数保持默认值。
+- 影响：`MEMORY_SIZE` / `--memory-size` 对数据库实际可用内存没有作用，只影响节点级 `memory_limit`。
+- 状态：`FIXED`
+- 修复版本：`0.4.8`
+- 修复：配置生成时按目标主机内存把绝对大小换算成百分比（向上取整，夹在 1–100），生成命令传
+  `--recommend-param --memory-limit <百分比>`；仍保留 TOML 的绝对 `memory_limit`。未指定内存尺寸时不启用推荐参数。
+- 注意：yasboot 对每节点内存有最小值限制（约主机内存的 1%），请求值小于该下限时会被抬到下限。
+- 验证：`tests/test_ports.sh` 断言两条路径；真实主机 `192.168.23.13` 重建 10G/100G 实例后 `show_memory_limit()` 复核。

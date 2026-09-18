@@ -132,7 +132,7 @@ validate_extra_args() {
 }
 
 db_generate_config() {
-	local host=$1 stage_q yasboot_q cluster_q user_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment ip_args node_args
+	local host=$1 stage_q yasboot_q cluster_q user_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment ip_args node_args memory_mb recommend_args
 	validate_extra_args "${YASBOOT_GEN_EXTRA_ARGS}" "--yasboot-gen-extra-args"
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
@@ -149,6 +149,17 @@ db_generate_config() {
 	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
+	# yasboot only sizes the database memory pools when recommended parameters are
+	# enabled. Translate the requested absolute size into the percentage of host
+	# memory it represents (computed on the target host) and pass it with
+	# --recommend-param, so --memory-size actually reaches the database parameters.
+	memory_mb=""
+	if [[ -n ${MEMORY_SIZE} ]]; then
+		memory_mb=${MEMORY_SIZE%[MmGg]}
+		case ${MEMORY_SIZE} in *[Gg]) memory_mb=$((memory_mb * 1024)) ;; esac
+	fi
+	recommend_args=""
+	[[ -z ${memory_mb} ]] || recommend_args='--recommend-param --memory-limit ${memory_percent}'
 	# The $ must be literal in this local value so the remote shell expands the
 	# host_ip variable; a backslash here would pass "${host_ip}" verbatim to yasboot.
 	ip_args='"${host_ip}"'
@@ -163,8 +174,15 @@ db_generate_config() {
 set -e
 ${host_ip_assignment}
 test -n \"\${host_ip}\"
+memory_percent=100
+if [[ -n \"${memory_mb}\" ]]; then
+  total_mb=\$(awk '/MemTotal/{printf \"%d\", \$2/1024}' /proc/meminfo)
+  memory_percent=\$(( (${memory_mb} * 100 + total_mb - 1) / total_mb ))
+  (( memory_percent < 1 )) && memory_percent=1
+  (( memory_percent > 100 )) && memory_percent=100
+fi
 cd ${stage_q}
-runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip ${ip_args} --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} ${node_args} ${YASBOOT_GEN_EXTRA_ARGS}
+runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip ${ip_args} --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} ${recommend_args} ${node_args} ${YASBOOT_GEN_EXTRA_ARGS}
 test -f ${stage_q}/${CLUSTER}.toml
 "
 }

@@ -26,10 +26,24 @@ grep -F -- '1701 1702' "${SCRIPT_LOG}" >/dev/null
 grep -F -- "set_listen_addr '[om.config]'" "${SCRIPT_LOG}" >/dev/null
 grep -F -- 'set_host_yasagent_addrs' "${SCRIPT_LOG}" >/dev/null
 grep -F -- 'host-addrs.awk' "${SCRIPT_LOG}" >/dev/null
+if grep -F -- '--recommend-param' "${SCRIPT_LOG}" >/dev/null; then
+	echo 'recommend param was enabled without a memory size' >&2
+	exit 1
+fi
 if grep -F -- '-m mysql' "${SCRIPT_LOG}" >/dev/null; then
 	echo 'default generation unexpectedly enabled MySQL mode' >&2
 	exit 1
 fi
+
+: >"${SCRIPT_LOG}"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1703 \
+	--db-port 1703 --memory-size 10G --install-path /data/yashan/ys1703/yasdb-home \
+	--data-path /data/yashan/ys1703/yasdb-data --log-path /data/yashan/ys1703/yasdb-log \
+	--stage-dir /data/yashan/ys1703/install --include-steps C-004 --log-dir "${TMP_DIR}/memory-logs"
+# --memory-size must reach the database parameters through yasboot recommendations.
+grep -F -- '--recommend-param --memory-limit ${memory_percent}' "${SCRIPT_LOG}" >/dev/null
+grep -F -- 'memory_percent=$(( (10240 * 100 + total_mb - 1) / total_mb ))' "${SCRIPT_LOG}" >/dev/null
 
 : >"${SCRIPT_LOG}"
 env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
