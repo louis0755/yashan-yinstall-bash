@@ -116,3 +116,19 @@
   `--recommend-param --memory-limit <百分比>`；仍保留 TOML 的绝对 `memory_limit`。未指定内存尺寸时不启用推荐参数。
 - 注意：yasboot 对每节点内存有最小值限制（约主机内存的 1%），请求值小于该下限时会被抬到下限。
 - 验证：`tests/test_ports.sh` 断言两条路径；真实主机 `192.168.23.13` 重建 10G/100G 实例后 `show_memory_limit()` 复核。
+
+## YINSTALL-012 — 绝对内存落在百分比边界下方，部署端份额被截断
+
+- 发现：2026-09-18
+- GitHub：[louis0755/yashan-yinstall-bash#12](https://github.com/louis0755/yashan-yinstall-bash/issues/12)
+- 现象：`--memory-size 10G` 的实例（`192.168.23.13`，主机 514599M）数据库内 `show_memory_limit()` 只有 3.18328G，
+  而同一个包在 100G 档给出 92.29G。
+- 原因：生成阶段按 2% 生成了 `memory_limit = "10291M"`，随后 C-005 把它覆写成精确的 `10240M`（=主机的 1.99%）；
+  部署阶段 yasom 反算份额时按整数截断 → `percent of memory_limit: 1%(10240M)`，推荐参数按 1% 计算，
+  `optimize parameter DATA_BUFFER_SIZE to 1141359529`（约 1.06G），池子合计 3.18G。
+- 影响：请求值与数据库实际内存之间出现"掉一档"的偏差，且偏差在小内存档最明显。
+- 状态：`FIXED`
+- 修复版本：`0.4.9`
+- 修复：C-005 写 TOML 时使用"覆盖请求值的最小 1% 边界值"（`percent=ceil(size*100/total)`，写入 `ceil(percent*total/100)M`），
+  使部署端反算出的份额与生成阶段一致。
+- 验证：`tests/test_ports.sh` 按目标机内存动态断言；真实主机重建后核对部署日志的 `percent of memory_limit` 与 `show_memory_limit()`。

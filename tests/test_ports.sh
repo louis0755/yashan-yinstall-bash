@@ -108,8 +108,15 @@ test "$(grep -cF 'LISTEN_ADDR = "127.0.0.1:1702"' "${EXEC_STAGE}/hosts.toml")" =
 test "$(grep -cF 'LISTEN_ADDR = "127.0.0.2:1702"' "${EXEC_STAGE}/hosts.toml")" = 1
 grep -F '    LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
 grep -F '      LISTEN_ADDR = ' "${EXEC_STAGE}/hosts.toml" >/dev/null
-grep -F '  memory_limit = "1024M"' "${EXEC_STAGE}/hosts.toml" >/dev/null
-grep -F '    memory_limit = "1024M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
+# The written value is the smallest 1%-of-host-memory value that covers the
+# request, so that yasom recomputes the same percentage at deploy time.
+TOTAL_MB=$(awk '/MemTotal/{printf "%d", $2/1024}' /proc/meminfo)
+EXPECT_PERCENT=$(( (1024 * 100 + TOTAL_MB - 1) / TOTAL_MB ))
+(( EXPECT_PERCENT < 1 )) && EXPECT_PERCENT=1
+(( EXPECT_PERCENT > 100 )) && EXPECT_PERCENT=100
+EXPECT_LIMIT=$(( (EXPECT_PERCENT * TOTAL_MB + 99) / 100 ))M
+grep -F "  memory_limit = \"${EXPECT_LIMIT}\"" "${EXEC_STAGE}/hosts.toml" >/dev/null
+grep -F "    memory_limit = \"${EXPECT_LIMIT}\"" "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -F '      COLUMNAR_BUFFER_SIZE = "256M"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -E 'mysql_addr = ".*:3307"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -F 'USE_NATIVE_TYPE = true' "${EXEC_STAGE}/ys1703.toml" >/dev/null

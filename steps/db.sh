@@ -188,7 +188,7 @@ test -f ${stage_q}/${CLUSTER}.toml
 }
 
 db_configure_ports() {
-	local host=$1 stage_q hosts_q cluster_config_q user_q memory_value host_ip_assignment host_addr_awk
+	local host=$1 stage_q hosts_q cluster_config_q user_q memory_mb memory_value host_ip_assignment host_addr_awk
 	stage_q=$(quote "${STAGE_DIR}")
 	hosts_q=$(quote "${STAGE_DIR}/hosts.toml")
 	cluster_config_q=$(quote "${STAGE_DIR}/${CLUSTER}.toml")
@@ -199,10 +199,16 @@ db_configure_ports() {
 	host_addr_awk=$(<"${ROOT_DIR}/steps/host-addrs.awk")
 	[[ ${host_addr_awk} != *"'"* ]] ||
 		die "steps/host-addrs.awk must not contain single quotes: it is spliced into a single-quoted shell string"
-	memory_value=""
+	# The requested size is passed in MB; the remote script turns it into the
+	# smallest 1%-of-host-memory value that still covers the request. Writing the
+	# raw absolute value can fall just below a percentage boundary (for example
+	# 10240M on a 514599M host is 1.99%), and yasom truncates that back to 1% when
+	# it recomputes recommended parameters, which undersizes the database (see
+	# YINSTALL-012).
+	memory_mb=""
 	if [[ -n ${MEMORY_SIZE} ]]; then
-		memory_value=${MEMORY_SIZE%[MmGg]}
-		case ${MEMORY_SIZE} in *[Gg]) memory_value=$((memory_value * 1024))M ;; *) memory_value=${memory_value}M ;; esac
+		memory_mb=${MEMORY_SIZE%[MmGg]}
+		case ${MEMORY_SIZE} in *[Gg]) memory_mb=$((memory_mb * 1024)) ;; esac
 	fi
 	host_ip_assignment='host_ip=$(hostname -I | awk '\''{print $1}'\'')'
 	[[ -z ${HOST_IP} ]] || host_ip_assignment="host_ip=$(quote "${HOST_IP}")"
@@ -212,17 +218,27 @@ ${host_ip_assignment}
 test -n \"\${host_ip}\"
 test -f ${hosts_q}
 test -f ${cluster_config_q}
-runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_value}") $(quote "${MYSQL_PORT}") $(quote "${USE_NATIVE_TYPE}") $(quote "${CHARACTER_SET}") <<'PORTS'
+runuser -u ${user_q} -- bash -s -- ${hosts_q} ${cluster_config_q} \"\${host_ip}\" ${YASOM_PORT} ${YASAGENT_PORT} $(quote "${memory_mb}") $(quote "${MYSQL_PORT}") $(quote "${USE_NATIVE_TYPE}") $(quote "${CHARACTER_SET}") <<'PORTS'
 set -euo pipefail
 hosts_file=\$1
 cluster_file=\$2
 host_ip=\$3
 yasom_port=\$4
 yasagent_port=\$5
-memory_value=\$6
+memory_mb=\$6
 mysql_port=\$7
 use_native_type=\$8
 character_set=\$9
+
+memory_value=\"\"
+if [[ -n \"\${memory_mb}\" ]]; then
+  total_mb=\$(awk '/MemTotal/{printf \"%d\", \$2/1024}' /proc/meminfo)
+  memory_percent=\$(( (\${memory_mb} * 100 + total_mb - 1) / total_mb ))
+  (( memory_percent < 1 )) && memory_percent=1
+  (( memory_percent > 100 )) && memory_percent=100
+  memory_value=\"\$(( (memory_percent * total_mb + 99) / 100 ))M\"
+  echo \"memory_limit \${memory_value} (\${memory_percent}% of \${total_mb}M, requested \${memory_mb}M)\" >&2
+fi
 
 set_listen_addr() {
   local section=\$1 address=\$2 temp_file
