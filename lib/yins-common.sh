@@ -38,6 +38,7 @@ init_defaults() {
 	BEGIN_PORT=1688
 	BEGIN_PORT_SET=false
 	DB_PORT=""
+	DB_VERSION=""
 	YASOM_PORT=""
 	YASAGENT_PORT=""
 	REPLICAT_PORT=""
@@ -141,6 +142,10 @@ parse_args() {
 			;;
 		--db-port)
 			DB_PORT=${2:?missing value for $1}
+			shift 2
+			;;
+		--db-version)
+			DB_VERSION=${2:?missing value for $1}
 			shift 2
 			;;
 		--yasom-port)
@@ -348,6 +353,11 @@ validate_request() {
 	fi
 	resolve_database_ports
 	[[ -z ${MEMORY_SIZE} || ${MEMORY_SIZE} =~ ^[1-9][0-9]*([MmGg])?$ ]] || die "memory size must be an integer with optional M or G suffix"
+	# Release builds are dotted numeric; internal builds add a build suffix
+	# (27.1.1.2-356-gd953d3665a9). The value becomes one path component, so no
+	# separator or shell metacharacter may pass this check.
+	[[ -z ${DB_VERSION} || ${DB_VERSION} =~ ^[0-9]+(\.[0-9]+)+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)*$ ]] ||
+		die "invalid --db-version: ${DB_VERSION}"
 	[[ ${DB_MODE} == yashan || ${DB_MODE} == mysql ]] || die "--mode must be yashan or mysql"
 	if [[ -n ${CHARACTER_SET} ]]; then
 		CHARACTER_SET=${CHARACTER_SET^^}

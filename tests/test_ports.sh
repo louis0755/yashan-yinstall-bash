@@ -66,6 +66,54 @@ env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}
 grep -F -- '-m mysql' "${SCRIPT_LOG}" >/dev/null
 grep -F -- "'3307'" "${SCRIPT_LOG}" >/dev/null
 
+# YINSTALL-014: yasboot drops the build suffix when it names the software directory,
+# so --db-version must rewrite the hosts.toml path before "package install" (and the
+# rewrite must not run when no version is requested).
+: >"${SCRIPT_LOG}"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1919 \
+	--db-port 1919 --db-version 27.1.1.2-356-gd953d3665a9 \
+	--install-path /data/yashan/ys1919/yasdb-home \
+	--data-path /data/yashan/ys1919/yasdb-data --log-path /data/yashan/ys1919/yasdb-log \
+	--stage-dir /data/yashan/ys1919/install --include-steps C-006 --log-dir "${TMP_DIR}/db-version-logs"
+grep -F -- "-v path='/data/yashan/ys1919/yasdb-home/27.1.1.2-356-gd953d3665a9'" "${SCRIPT_LOG}" >/dev/null
+grep -F -- '.install-path' "${SCRIPT_LOG}" >/dev/null
+awk '/install-path/ { rewrite = NR } /package install -t/ { install = NR } END { exit !(rewrite && install && rewrite < install) }' "${SCRIPT_LOG}" || {
+	echo 'C-006 did not rewrite the software path before package install' >&2
+	exit 1
+}
+
+: >"${SCRIPT_LOG}"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1919 \
+	--db-port 1919 --install-path /data/yashan/ys1919/yasdb-home \
+	--data-path /data/yashan/ys1919/yasdb-data --log-path /data/yashan/ys1919/yasdb-log \
+	--stage-dir /data/yashan/ys1919/install --include-steps C-006 --log-dir "${TMP_DIR}/no-db-version-logs"
+if grep -F -- '.install-path' "${SCRIPT_LOG}" >/dev/null; then
+	echo 'C-006 rewrote the software path without --db-version' >&2
+	exit 1
+fi
+
+# The rewrite helper itself: every path entry is replaced and everything else is kept.
+HOST_PATH_TOML="${TMP_DIR}/host-path.toml"
+printf '%s\n' \
+	'uuid = "x"' \
+	'[[host]]' \
+	'  path = "/data/yashan/ys1919/yasdb-home/27.1.1.2"' \
+	'  log_path = "/data/yashan/ys1919/yasdb-log"' \
+	'[[host]]' \
+	'    path = "/data/yashan/ys1919/yasdb-home/27.1.1.2"' >"${HOST_PATH_TOML}"
+awk -v path=/data/yashan/ys1919/yasdb-home/27.1.1.2-356-gd953d3665a9 \
+	-f "${ROOT_DIR}/steps/host-path.awk" "${HOST_PATH_TOML}" >"${TMP_DIR}/host-path.out"
+test "$(grep -cF 'path = "/data/yashan/ys1919/yasdb-home/27.1.1.2-356-gd953d3665a9"' "${TMP_DIR}/host-path.out")" = 2
+grep -Fx '  path = "/data/yashan/ys1919/yasdb-home/27.1.1.2-356-gd953d3665a9"' "${TMP_DIR}/host-path.out" >/dev/null
+grep -Fx '    path = "/data/yashan/ys1919/yasdb-home/27.1.1.2-356-gd953d3665a9"' "${TMP_DIR}/host-path.out" >/dev/null
+grep -Fx '  log_path = "/data/yashan/ys1919/yasdb-log"' "${TMP_DIR}/host-path.out" >/dev/null
+if grep -F '27.1.1.2"' "${TMP_DIR}/host-path.out" >/dev/null; then
+	echo 'the rewrite helper left an unqualified software path behind' >&2
+	exit 1
+fi
+
 EXEC_STAGE="${TMP_DIR}/stage"
 mkdir -p -- "${EXEC_STAGE}"
 printf '%s\n' \
@@ -145,5 +193,32 @@ if grep -Eq -- 'package se gen.*[[:space:]]-p[[:space:]]' "${LOCAL_SCRIPT_LOG}";
 	echo 'local mode passed a database password to yasboot package se gen' >&2
 	exit 1
 fi
+
+# YINSTALL-013: the C-001 port check must anchor the port pattern and keep it quoted.
+# A five-digit listener (:19205 from a neighbouring cluster) must not make managed
+# port 1920 look busy, while a real listener on the managed port must still fail.
+printf '%s\n' '#!/usr/bin/env bash' 'cat "${TEST_SS_OUTPUT}"' >"${FAKE_BIN}/ss"
+chmod +x "${FAKE_BIN}/ss"
+PORT_CHECK_ARGS=(
+	db install --local --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test
+	--cluster ys1919 --db-port 1919
+	--install-path "${TMP_DIR}/port-check/yasdb-home" --data-path "${TMP_DIR}/port-check/yasdb-data"
+	--log-path "${TMP_DIR}/port-check/yasdb-log" --stage-dir "${TMP_DIR}/port-check/install"
+	--include-steps C-001 --log-dir "${TMP_DIR}/port-check-logs"
+)
+printf '%s\n' 'LISTEN 0 512 192.168.23.5:19205 0.0.0.0:*' 'LISTEN 0 512 192.168.23.5:19206 0.0.0.0:*' >"${TMP_DIR}/ss-prefix-only"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SS_OUTPUT="${TMP_DIR}/ss-prefix-only" \
+	bash "${ROOT_DIR}/yinstall.sh" "${PORT_CHECK_ARGS[@]}" >"${TMP_DIR}/port-check-stdout" 2>"${TMP_DIR}/port-check-stderr" || {
+	cat "${TMP_DIR}/port-check-stderr" >&2
+	echo 'C-001 treated a five-digit listener as a managed port conflict' >&2
+	exit 1
+}
+printf '%s\n' 'LISTEN 0 512 192.168.23.5:1920 0.0.0.0:*' >"${TMP_DIR}/ss-exact-port"
+if env PATH="${FAKE_BIN}:${PATH}" TEST_SS_OUTPUT="${TMP_DIR}/ss-exact-port" \
+	bash "${ROOT_DIR}/yinstall.sh" "${PORT_CHECK_ARGS[@]}" >"${TMP_DIR}/port-check-stdout" 2>"${TMP_DIR}/port-check-stderr"; then
+	echo 'C-001 did not report an exact managed port conflict' >&2
+	exit 1
+fi
+grep -F 'managed port 1920 is already listening' "${TMP_DIR}/port-check-stderr" >/dev/null
 
 echo "test_ports.sh: passed"

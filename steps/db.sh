@@ -48,7 +48,7 @@ if [ -e ${stage_q}/${CLUSTER}.toml ] && [ ${FORCE} != true ]; then
   exit 1
 fi
 for port in ${ports_q}; do
-  if ss -ltn 2>/dev/null | awk '{print \$4}' | grep -Eq "[:.]\${port}$"; then
+  if ss -ltn 2>/dev/null | awk '{print \$4}' | grep -Eq \"[:.]\${port}$\"; then
     echo \"managed port \${port} is already listening\" >&2
     exit 1
   fi
@@ -65,7 +65,7 @@ db_precheck_ports() {
 	remote_check C-000 "${host}" "
 set -e
 for port in ${ports_q}; do
-  if ss -ltn 2>/dev/null | awk '{print \$4}' | grep -Eq "[:.]\${port}$"; then
+  if ss -ltn 2>/dev/null | awk '{print \$4}' | grep -Eq \"[:.]\${port}$\"; then
     echo \"managed port \${port} is already listening\" >&2
     exit 1
   fi
@@ -482,14 +482,28 @@ PORTS
 }
 
 db_install_software() {
-	local host=$1 stage_q yasboot_q hosts_q user_q
+	local host=$1 stage_q yasboot_q hosts_q user_q version_path_q host_path_awk path_rewrite=""
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
 	hosts_q=$(quote "${STAGE_DIR}/hosts.toml")
 	user_q=$(quote "${OS_USER}")
+	# yasboot names the software directory after the release version and drops any
+	# build suffix (27.1.1.2 for 27.1.1.2-356-gd953d3665a9), but it installs into the
+	# "path" recorded per host in hosts.toml. When the caller knows the full version,
+	# rewrite that field so the on-disk home keeps the build identity and matches the
+	# version myas records (YINSTALL-014).
+	if [[ -n ${DB_VERSION} ]]; then
+		version_path_q=$(quote "${INSTALL_PATH}/${DB_VERSION}")
+		host_path_awk=$(<"${ROOT_DIR}/steps/host-path.awk")
+		[[ ${host_path_awk} != *"'"* ]] ||
+			die "steps/host-path.awk must not contain single quotes: it is spliced into a single-quoted shell string"
+		path_rewrite="awk -v path=${version_path_q} '${host_path_awk}' ${hosts_q} >${hosts_q}.install-path
+mv -- ${hosts_q}.install-path ${hosts_q}"
+	fi
 	remote_exec C-006 "${host}" true "
 set -e
 cd ${stage_q}
+${path_rewrite}
 runuser -u ${user_q} -- ${yasboot_q} package install -t ${hosts_q}
 "
 }

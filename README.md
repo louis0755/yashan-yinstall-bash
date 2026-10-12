@@ -53,3 +53,8 @@ Replicat=`P+1`，并会更新生成的 `hosts.toml`。先使用 `--precheck` 或
 
 可通过 `--character-set CHARSET` 指定字符集，支持 `ASCII`、`ISO88591`、`GBK`、
 `UTF8` 和 `GB18030`；未指定时保留 yasboot 生成的默认值。
+
+`--db-version VERSION` 指定软件安装到 `<install-path>/<version>`。`yasboot package
+se gen` 只按"发布版本"写入路径（内部构建 `27.1.1.2-356-gd953d3665a9` 会变成
+`27.1.1.2`），而 `package install` 按 `hosts.toml` 里的 `path` 落地，所以该选项在安装前
+重写该字段；不传时保持 yasboot 的原始路径。

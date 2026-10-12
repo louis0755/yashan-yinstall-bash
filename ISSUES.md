@@ -132,3 +132,41 @@
 - 修复：C-005 写 TOML 时使用"覆盖请求值的最小 1% 边界值"（`percent=ceil(size*100/total)`，写入 `ceil(percent*total/100)M`），
   使部署端反算出的份额与生成阶段一致。
 - 验证：`tests/test_ports.sh` 按目标机内存动态断言；真实主机重建后核对部署日志的 `percent of memory_limit` 与 `show_memory_limit()`。
+
+## YINSTALL-013 — C-001/C-000 端口检查丢失 `$` 锚点，五位数端口误报占用
+
+- 发现：2026-10-12
+- 现象：`192.168.23.5` 上 `myas create ... --db-port 1919 --precheck` 失败，报 `managed port 1920 is already listening`，
+  但 `ss -ltn | awk '{print $4}' | grep -E '[:.]1920$'` 无任何匹配。
+- 原因：`steps/db.sh` 里嵌套脚本的模式写成 `grep -Eq "[:.]\${port}$"`，内层引号没有转义成 `\"`，
+  外层双引号提前闭合，生成到目标机的实际命令变成 `grep -Eq [:.]${port}`：`$` 锚点丢失。
+  于是匹配退化为"行内任意位置出现 `:端口`"，邻居集群的五位数监听端口 `:19205`/`:19206` 命中 `:1920`。
+- 影响：只要目标机上存在形如 `<受管端口><更多数字>` 的 5 位监听端口，该受管端口就被误判为已占用，
+  预检和安装被错误中止（本例为 `1920`）。
+- 状态：`FIXED`
+- 修复版本：`0.4.10`
+- 修复：`db_precheck`（C-001）和 `db_precheck_ports`（C-000）的模式改为 `\"[:.]\${port}$\"`，
+  目标机上还原为带引号、带 `$` 锚点的精确匹配。
+- 验证：`tests/test_ports.sh` 用假 `ss` 断言两条路径——只监听 `:19205`/`:19206` 时检查必须通过，
+  精确监听 `:1920` 时必须报 `managed port 1920 is already listening`。
+
+## YINSTALL-014 — 带构建后缀的版本无法落到同名 YASDB_HOME 目录
+
+- 发现：2026-10-12
+- 需求：用 `myas` 安装内部构建包 `yashandb-27.1.1.2-356-gd953d3665a9-linux-aarch64.tar.gz` 时，
+  `yasdb_home` 目录名要求是 `27.1.1.2-356-gd953d3665a9`（同一 27.1.1.2 的不同构建要能区分，
+  并且与 `myas` 记录的版本一致）。
+- 现象：安装后目录是 `.../yasdb-home/27.1.1.2`，而包内 `conf/profile.toml` 的
+  `version = "27.1.1.2-356-gd953d3665a9"`、`myas info` 记录的也是完整版本，两者不一致。
+- 原因：`yasboot package se gen` 按"发布版本"生成 `[[host]] path`（丢弃构建后缀），
+  而 `yasboot package install -t hosts.toml` 是按该 `path` 落地的。
+- 影响：`YASDB_HOME`/`PATH` 回退路径（`<install-path>/<myas 版本>`）不存在；
+  同版本不同构建的目录名无法区分。
+- 状态：`FIXED`
+- 修复版本：`0.4.11`
+- 修复：新增 `--db-version VERSION`，C-006 在 `package install` 之前用 `steps/host-path.awk`
+  把 `hosts.toml` 中所有 `path` 重写为 `<install-path>/<version>`；`myas` 始终传入实例版本。
+  未传 `--db-version` 时保持原行为。
+- 验证：`192.168.23.5` 上先做隔离探针（改写 `path` 后 `package install` 落到指定目录、
+  其他目录不出现），再真实创建 `ys1919`：`yasdb-home/27.1.1.2-356-gd953d3665a9` 存在、
+  库 `open/normal/primary`；`tests/test_ports.sh` 断言生成脚本的重写顺序与关闭路径。
