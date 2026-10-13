@@ -1,5 +1,46 @@
 # 变更记录
 
+## 0.4.14 - 2026-10-13
+
+### 文档
+
+- `--help` 的 `--legacy` 说明补上字符集限制：只支持 `ASCII`、`ISO88591`、`GBK`、`UTF8`，
+  22.2 系列没有 `GB18030`。与 0.4.13 的校验行为一致，仅帮助文本补齐。
+
+### 测试
+
+- `tests/test_ports.sh` 的 legacy 用例改为断言 C-006 传给 yasboot 的 `-i` 参数是目标主机上的
+  上传路径（`/data/yashan/soft/yashandb.tar.gz`），而不只是断言出现过 `-i`。
+
+## 0.4.13 - 2026-10-13
+
+### 修复
+
+- `--legacy` 现在拒绝 `--character-set GB18030`：22.2 系列的建库字符集只有
+  `ASCII`、`ISO88591`、`GBK`、`UTF8`（见 22.2.16.101 包内 `conf/database_options.json`
+  与 22.2 文档的配置参数、CREATE DATABASE、yasboot 建库参数三处），`GB18030` 是 23.x 才
+  有的取值。此前该组合会一路走到 `cluster deploy` 才由 yasdb 报错，现在在参数校验阶段
+  直接给出原因。
+- `tests/test_cli.sh` 增加对应用例。
+
+## 0.4.12 - 2026-10-13
+
+### 新增
+
+- 新增 `--legacy`：安装 22.2 这类老版本的安装包。老包是"平铺"布局（`admin/`、`bin/`、
+  `conf/`、`lib/`、`scripts/` 等直接在包根，没有 23.x 的内层 `database-*.tar.gz`），
+  且 yasboot 没有 `package se gen`。该模式改用：
+  - C-003 以 `bin/yasboot` + `bin/yasdb` 判定包完整性，不再要求内层 `database-*.tar.gz`；
+  - C-004 改用 `yasboot package config gen --cluster ... --yas-type SE`（老版 yasboot 由
+    `--begin-port` 直接推导数据库监听端口，因此这里传数据库端口而不是 Yasom 端口）；
+  - C-005 不再写入 `COLUMNAR_BUFFER_SIZE`（22.2 无此参数，写入会在部署时被拒）；
+  - C-006 改用 `yasboot package install -i <安装包> -t hosts.toml`，并跳过 23.x 的
+    `<install-path>/<version>` 路径重写（老版 yasboot 自行落成
+    `<install-path>/yashandb/<version>`）。
+- `--legacy` 仅支持单机：与 `--standbys`、`--mode mysql`、`--use-native-type`、
+  `--memory-size` 组合会被明确拒绝；`--log-path` 在该模式下不生效（老版 yasboot 把日志
+  放在安装目录下），因此 myas 登记里的 log_path 对老版本只是记录值。
+
 ## 0.4.11 - 2026-10-12
 
 ### 新增

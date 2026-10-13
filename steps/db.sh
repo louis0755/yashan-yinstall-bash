@@ -119,7 +119,13 @@ case ${remote_q} in
   *) echo 'unsupported package extension' >&2; exit 1 ;;
 esac
 test -x ${stage_q}/bin/yasboot
-find ${stage_q} -maxdepth 2 -type f -name 'database-*.tar.gz' -print -quit | grep -q .
+if [ ${LEGACY} = true ]; then
+  # Legacy (22.2-era) packages ship the software tree itself, so there is no
+  # inner database-*.tar.gz to verify; bin/yasdb is the equivalent evidence.
+  test -x ${stage_q}/bin/yasdb
+else
+  find ${stage_q} -maxdepth 2 -type f -name 'database-*.tar.gz' -print -quit | grep -q .
+fi
 chown -R ${user_group_q} ${stage_q}
 "
 }
@@ -149,6 +155,23 @@ db_generate_config() {
 	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
+	if [[ ${LEGACY} == true ]]; then
+		# 22.2-era yasboot has no "package se gen"; "package config gen" writes the
+		# same hosts.toml/<cluster>.toml pair with --yas-type SE. It also derives the
+		# database listen port from --begin-port directly, where the 23.x generator
+		# treats --begin-port as the Yasom port, so the database port is passed here.
+		host_ip_assignment='host_ip=$(hostname -I | awk '\''{print $1}'\'')'
+		[[ -z ${HOST_IP} ]] || host_ip_assignment="host_ip=$(quote "${HOST_IP}")"
+		remote_exec C-004 "${host}" true "
+set -e
+${host_ip_assignment}
+test -n \"\${host_ip}\"
+cd ${stage_q}
+runuser -u ${user_q} -- ${yasboot_q} package config gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip \"\${host_ip}\" --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --begin-port ${DB_PORT} -t SE ${YASBOOT_GEN_EXTRA_ARGS}
+test -f ${stage_q}/${CLUSTER}.toml
+"
+		return 0
+	fi
 	# yasboot only sizes the database memory pools when recommended parameters are
 	# enabled. Translate the requested absolute size into the percentage of host
 	# memory it represents (computed on the target host) and pass it with
@@ -467,7 +490,11 @@ if [[ -n \${memory_value} ]]; then
   set_memory_limit \"\${hosts_file}\" '[[host]]'
   set_memory_limit \"\${cluster_file}\" '[[group.node]]'
 fi
-set_columnar_buffer_size "\${cluster_file}"
+if [ ${LEGACY} = false ]; then
+  # COLUMNAR_BUFFER_SIZE does not exist in 22.2-era releases; adding it to a
+  # legacy node config would be rejected at deploy time.
+  set_columnar_buffer_size "\${cluster_file}"
+fi
 if [[ -n \${mysql_port} ]]; then
   set_mysql_addr "\${cluster_file}" "\${host_ip}:\${mysql_port}"
 fi
@@ -487,6 +514,21 @@ db_install_software() {
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
 	hosts_q=$(quote "${STAGE_DIR}/hosts.toml")
 	user_q=$(quote "${OS_USER}")
+	if [[ ${LEGACY} == true ]]; then
+		# 22.2-era yasboot installs the software from the package archive passed with
+		# -i; the 23.x flow installs from the database-*.tar.gz already extracted into
+		# the stage directory. A legacy package also has no build-qualified version
+		# directory to rewrite, because yasboot derives <install-path>/yashandb/<version>
+		# itself.
+		local legacy_package_q
+		legacy_package_q=$(quote "$(remote_package_path)")
+		remote_exec C-006 "${host}" true "
+set -e
+cd ${stage_q}
+runuser -u ${user_q} -- ${yasboot_q} package install -i ${legacy_package_q} -t ${hosts_q}
+"
+		return 0
+	fi
 	# yasboot names the software directory after the release version and drops any
 	# build suffix (27.1.1.2 for 27.1.1.2-356-gd953d3665a9), but it installs into the
 	# "path" recorded per host in hosts.toml. When the caller knows the full version,

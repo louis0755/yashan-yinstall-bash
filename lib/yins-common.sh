@@ -14,6 +14,7 @@ init_defaults() {
 	PRECHECK=false
 	DRY_RUN=false
 	FORCE=false
+	LEGACY=false
 	CONFIRM=false
 	PURGE_DATA=false
 	INCLUDE_STEPS=""
@@ -224,6 +225,10 @@ parse_args() {
 			FORCE=true
 			shift
 			;;
+		--legacy)
+			LEGACY=true
+			shift
+			;;
 		--confirm)
 			CONFIRM=true
 			shift
@@ -378,6 +383,23 @@ validate_request() {
 	for path in "${INSTALL_PATH}" "${DATA_PATH}" "${LOG_PATH}" "${STAGE_DIR}"; do
 		is_absolute_path "${path}" || die "unsafe path: ${path}"
 	done
+	# Legacy packages (22.2-era) have a flat software tree, no inner
+	# database-*.tar.gz, and a yasboot without "package se gen". Their
+	# single-node-only flow is selected explicitly so a 23.x package never takes
+	# this branch by accident.
+	if [[ ${LEGACY} == true ]]; then
+		[[ ${COMMAND}:${SUBCOMMAND} == db:install ]] || die "--legacy is supported only by db install"
+		[[ -z ${STANDBYS} ]] || die "--legacy supports single-node installation only"
+		[[ ${DB_MODE} == yashan ]] || die "--legacy does not support --mode mysql"
+		[[ ${USE_NATIVE_TYPE} == false ]] || die "--legacy does not support --use-native-type"
+		[[ -z ${MEMORY_SIZE} ]] || die "--legacy does not support --memory-size"
+		# 22.2-era releases accept ASCII, ISO88591, GBK, and UTF8 only; GB18030 is
+		# rejected here so the caller learns it before yasboot deploys the cluster.
+		case ${CHARACTER_SET} in
+		"" | ASCII | ISO88591 | GBK | UTF8) ;;
+		*) die "--legacy does not support --character-set ${CHARACTER_SET} (22.2-era releases accept ASCII, ISO88591, GBK, UTF8)" ;;
+		esac
+	fi
 	if [[ -n ${GENERATE_SCRIPT} ]]; then
 		[[ ${LOCAL} == true ]] || die "--generate-script requires --local"
 		[[ ${COMMAND}:${SUBCOMMAND} == os:prepare || ${COMMAND}:${SUBCOMMAND} == db:install ]] || die "--generate-script is supported only by os prepare and db install"

@@ -46,6 +46,14 @@ assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /miss
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --recommend-memory
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --memory-limit 50
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --character-set LATIN1
+# --legacy is a single-node 22.2-era mode: reject the options it cannot honor.
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --legacy --memory-size 1G
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --legacy --use-native-type
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --legacy --mode mysql --mysql-port 3307
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --legacy --character-set GB18030
+assert_failure bash "${ROOT_DIR}/yinstall.sh" os prepare --local --legacy
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --standbys 10.0.0.12 --host-ip 10.0.0.11 \
+	--package /missing.tar.gz --db-admin-password test --legacy
 
 touch "${TMP_DIR}/YashanDB.tar.gz"
 export TEST_MARKER="${TMP_DIR}/marker"
@@ -65,6 +73,9 @@ printf '%s\n' '#!/usr/bin/env bash' 'exit 1' >"${LOCAL_FAKE_BIN}/scp"
 chmod +x "${LOCAL_FAKE_BIN}/ssh" "${LOCAL_FAKE_BIN}/scp"
 assert_success env PATH="${LOCAL_FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install --local \
 	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703 --include-steps C-004 --dry-run --log-dir "${TMP_DIR}/local-logs"
+assert_success env PATH="${LOCAL_FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install --local \
+	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1915 --legacy \
+	--include-steps C-004 --dry-run --log-dir "${TMP_DIR}/legacy-logs"
 
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --standbys 10.0.0.12 \
 	--package "${TMP_DIR}/YashanDB.tar.gz" --db-admin-password test --db-port 1703

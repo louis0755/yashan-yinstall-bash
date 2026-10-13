@@ -94,6 +94,30 @@ if grep -F -- '.install-path' "${SCRIPT_LOG}" >/dev/null; then
 	exit 1
 fi
 
+# --legacy (22.2-era packages): the flat tree is verified with bin/yasdb, the config
+# comes from "package config gen -t SE" with the database port as --begin-port, and the
+# software is installed from the package archive with -i.
+: >"${SCRIPT_LOG}"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${SCRIPT_LOG}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1915 \
+	--db-port 1915 --legacy \
+	--install-path /data/yashan/ys1915/yasdb-home \
+	--data-path /data/yashan/ys1915/yasdb-data --log-path /data/yashan/ys1915/yasdb-log \
+	--stage-dir /data/yashan/ys1915/install \
+	--include-steps C-003,C-004,C-005,C-006 --log-dir "${TMP_DIR}/legacy-logs"
+grep -F -- 'bin/yasdb' "${SCRIPT_LOG}" >/dev/null
+grep -F -- 'package config gen --cluster' "${SCRIPT_LOG}" >/dev/null
+grep -F -- '-t SE' "${SCRIPT_LOG}" >/dev/null
+grep -F -- '--begin-port 1915' "${SCRIPT_LOG}" >/dev/null
+# The remote flow must hand yasboot the uploaded package path, not the caller's.
+grep -F -- "package install -i '/data/yashan/soft/yashandb.tar.gz'" "${SCRIPT_LOG}" >/dev/null
+# The C-005 helper comment mentions "package se gen"; only the real 23.x invocation
+# ("package se gen --cluster ...") must be absent here.
+if grep -F -- 'package se gen --cluster' "${SCRIPT_LOG}" >/dev/null; then
+	echo 'legacy install used the 23.x package se gen' >&2
+	exit 1
+fi
+
 # The rewrite helper itself: every path entry is replaced and everything else is kept.
 HOST_PATH_TOML="${TMP_DIR}/host-path.toml"
 printf '%s\n' \
@@ -169,6 +193,36 @@ grep -F '      COLUMNAR_BUFFER_SIZE = "256M"' "${EXEC_STAGE}/ys1703.toml" >/dev/
 grep -E 'mysql_addr = ".*:3307"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -F 'USE_NATIVE_TYPE = true' "${EXEC_STAGE}/ys1703.toml" >/dev/null
 grep -F 'CHARACTER_SET = "GBK"' "${EXEC_STAGE}/ys1703.toml" >/dev/null
+
+# --legacy must keep the port rewriting but never add COLUMNAR_BUFFER_SIZE, which does
+# not exist in 22.2-era releases.
+printf '%s\n' \
+	'[om]' \
+	'  [om.config]' \
+	'    LISTEN_ADDR = "127.0.0.1:1686"' \
+	'[[host]]' \
+	'  hostid = "host0001"' \
+	'  ip = "127.0.0.1"' \
+	'  [host.yasagent]' \
+	'    [host.yasagent.config]' \
+	'      LISTEN_ADDR = "127.0.0.1:1687"' >"${EXEC_STAGE}/hosts.toml"
+printf '%s\n' \
+	'[[group]]' \
+	'  [group.config]' \
+	'    CHARACTER_SET = "utf8"' \
+	'  [[group.node]]' \
+	'    [group.node.config]' \
+	'      RUN_LOG_LEVEL = "INFO"' >"${EXEC_STAGE}/ys1915.toml"
+env PATH="${FAKE_BIN}:${PATH}" bash "${ROOT_DIR}/yinstall.sh" db install \
+	--target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test --cluster ys1915 \
+	--db-port 1915 --legacy --install-path "${TMP_DIR}/yasdb-home" --data-path "${TMP_DIR}/yasdb-data" \
+	--log-path "${TMP_DIR}/yasdb-log" --stage-dir "${EXEC_STAGE}" --include-steps C-005 --log-dir "${TMP_DIR}/legacy-execute-logs"
+grep -E 'LISTEN_ADDR = ".*:1913"' "${EXEC_STAGE}/hosts.toml" >/dev/null
+grep -E 'LISTEN_ADDR = ".*:1914"' "${EXEC_STAGE}/hosts.toml" >/dev/null
+if grep -F 'COLUMNAR_BUFFER_SIZE' "${EXEC_STAGE}/ys1915.toml" >/dev/null; then
+	echo 'legacy C-005 wrote COLUMNAR_BUFFER_SIZE' >&2
+	exit 1
+fi
 
 LOCAL_SCRIPT_LOG="${TMP_DIR}/local-scripts"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 1' >"${FAKE_BIN}/ssh"
