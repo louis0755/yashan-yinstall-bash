@@ -1,5 +1,33 @@
 # 变更记录
 
+## 0.4.15 - 2026-10-30
+
+### 新增
+
+- 新增 `--cdb`（别名 `--enable-pluggable-database`）：建库阶段把初始数据库部署为容器
+  数据库（CDB），即 `package se gen` 追加 `--enable-pluggable-database`。PDB 只能在
+  建库时决定：官方文档明确，非容器库事后改参数转换后 `YASDB_HOME` 下不会生成
+  `pdb_add.toml`，`yasboot pdb` 相关操作不可用，因此该选项落在 C-004 而不是事后
+  `CREATE DATABASE` 补做。
+- 新增 `--pdb NAME`：容器库验证通过后由新增步骤 C-009 执行
+  `yasboot pdb add --pdb NAME --pdb-config <YASDB_HOME>/pdb_add.toml`，并输出
+  `yasboot pdb status` 结果。`pdb_add.toml` 缺失时以明确信息失败，不静默跳过。
+- C-004 在生成配置前探测 `yasboot package se gen --help` 是否包含
+  `--enable-pluggable-database`：23.5 以下版本的 yasboot 会忽略未知选项，若只依赖
+  选项本身，会得到一个"看起来成功、实际没有 PDB 能力"的普通库。
+
+### 限制
+
+- `--cdb` 仅用于 `db install`，与 `--legacy` 互斥（22.2 系列无容器数据库）。
+- `--pdb` 需与 `--cdb` 同时使用，且不与 `--standbys` 组合：主备场景下 PDB 创建后
+  还需在备库执行 `yasboot pdb build`，本版未编排该步骤。
+
+### 测试
+
+- `tests/test_cli.sh` 增加参数校验用例：`--cdb` 与 `--legacy` 互斥、`--pdb` 缺少
+  `--cdb` 失败、`--pdb` 与 `--standbys` 互斥、`--cdb` 不能用于 `os prepare`；
+  并断言 C-004 生成命令包含 `--enable-pluggable-database`。
+
 ## 0.4.14 - 2026-10-13
 
 ### 文档

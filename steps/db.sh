@@ -26,6 +26,13 @@ run_db_install() {
 	else
 		run_step C-008 "${host}" "verify standalone database" db_verify "${host}"
 	fi
+	if [[ -n ${PDB_NAME} ]]; then
+		if [[ ${PRECHECK} == true || ${DRY_RUN} == true ]]; then
+			log INFO C-009 "${host}" "skipped by precheck/dry-run; PDB ${PDB_NAME} is not created"
+		else
+			run_step C-009 "${host}" "create pluggable database ${PDB_NAME}" db_create_pdb "${host}"
+		fi
+	fi
 }
 
 remote_package_path() {
@@ -138,7 +145,7 @@ validate_extra_args() {
 }
 
 db_generate_config() {
-	local host=$1 stage_q yasboot_q cluster_q user_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment ip_args node_args memory_mb recommend_args
+	local host=$1 stage_q yasboot_q cluster_q user_q install_q data_q log_q auth_args mode_args force_arg host_ip_assignment ip_args node_args memory_mb recommend_args cdb_args cdb_check
 	validate_extra_args "${YASBOOT_GEN_EXTRA_ARGS}" "--yasboot-gen-extra-args"
 	stage_q=$(quote "${STAGE_DIR}")
 	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
@@ -155,6 +162,14 @@ db_generate_config() {
 	[[ ${DB_MODE} == yashan ]] || mode_args="-m mysql"
 	force_arg=""
 	[[ ${FORCE} == false ]] || force_arg="--force"
+	cdb_args=""
+	cdb_check=""
+	if [[ ${CDB} == true ]]; then
+		cdb_args="--enable-pluggable-database"
+		# Older yasboot builds accept unknown flags silently, which would yield a
+		# plain database with no PDB support, so the capability is probed first.
+		cdb_check="runuser -u ${user_q} -- ${yasboot_q} package se gen --help 2>&1 | grep -q -- '--enable-pluggable-database' || { echo 'this yasboot has no --enable-pluggable-database; a container database requires YashanDB 23.5 or later' >&2; exit 1; }"
+	fi
 	if [[ ${LEGACY} == true ]]; then
 		# 22.2-era yasboot has no "package se gen"; "package config gen" writes the
 		# same hosts.toml/<cluster>.toml pair with --yas-type SE. It also derives the
@@ -205,7 +220,8 @@ if [[ -n \"${memory_mb}\" ]]; then
   (( memory_percent > 100 )) && memory_percent=100
 fi
 cd ${stage_q}
-runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip ${ip_args} --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} ${recommend_args} ${node_args} ${YASBOOT_GEN_EXTRA_ARGS}
+${cdb_check}
+runuser -u ${user_q} -- ${yasboot_q} package se gen --cluster ${cluster_q} -u ${user_q} ${auth_args} --ip ${ip_args} --port ${SSH_PORT} --install-path ${install_q} --data-path ${data_q} --log-path ${log_q} --begin-port ${BEGIN_PORT} ${mode_args} ${force_arg} ${recommend_args} ${node_args} ${cdb_args} ${YASBOOT_GEN_EXTRA_ARGS}
 test -f ${stage_q}/${CLUSTER}.toml
 "
 }
@@ -575,5 +591,26 @@ db_verify() {
 set -e
 ${yasboot_q} cluster status -c ${cluster_q} -d
 pgrep -x yasdb >/dev/null
+"
+}
+
+db_create_pdb() {
+	local host=$1 stage_q yasboot_q cluster_q user_q install_q password_q pdb_q
+	stage_q=$(quote "${STAGE_DIR}")
+	yasboot_q=$(quote "${STAGE_DIR}/bin/yasboot")
+	cluster_q=$(quote "${CLUSTER}")
+	user_q=$(quote "${OS_USER}")
+	install_q=$(quote "${INSTALL_PATH}")
+	password_q=$(quote "${DB_ADMIN_PASSWORD}")
+	pdb_q=$(quote "${PDB_NAME}")
+	# A container deployment writes pdb_add.toml into YASDB_HOME; without it
+	# "yasboot pdb add" cannot run, which is exactly the non-CDB case.
+	remote_exec C-009 "${host}" true "
+set -e
+cd ${stage_q}
+pdb_config=\$(ls ${install_q}/*/pdb_add.toml 2>/dev/null | head -1)
+test -n \"\${pdb_config}\" || { echo 'pdb_add.toml not found under ${INSTALL_PATH}; the cluster was not deployed as a container database' >&2; exit 1; }
+runuser -u ${user_q} -- ${yasboot_q} pdb add -c ${cluster_q} --pdb ${pdb_q} --pdb-config \"\${pdb_config}\" -u sys -p ${password_q}
+runuser -u ${user_q} -- ${yasboot_q} pdb status -c ${cluster_q} --pdb ${pdb_q} -u sys -p ${password_q}
 "
 }

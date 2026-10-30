@@ -54,6 +54,14 @@ assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /miss
 assert_failure bash "${ROOT_DIR}/yinstall.sh" os prepare --local --legacy
 assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --standbys 10.0.0.12 --host-ip 10.0.0.11 \
 	--package /missing.tar.gz --db-admin-password test --legacy
+# A container database is a creation-time decision: --cdb has no legacy form, and
+# --pdb needs both --cdb and a single-node topology.
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --legacy --cdb
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --pdb pdb1
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install -t 10.0.0.11 --standbys 10.0.0.12 \
+	--package /missing.tar.gz --db-admin-password test --cdb --pdb pdb1
+assert_failure bash "${ROOT_DIR}/yinstall.sh" os prepare --local --cdb
+assert_failure bash "${ROOT_DIR}/yinstall.sh" db install --local --package /missing.tar.gz --db-admin-password test --cdb --pdb 'bad pdb'
 
 touch "${TMP_DIR}/YashanDB.tar.gz"
 export TEST_MARKER="${TMP_DIR}/marker"

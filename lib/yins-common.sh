@@ -52,6 +52,8 @@ init_defaults() {
 	STANDBY_REMOVE_CMD=""
 	YASBOOT_GEN_EXTRA_ARGS=""
 	YASBOOT_DEPLOY_EXTRA_ARGS=""
+	CDB=false
+	PDB_NAME=""
 }
 
 parse_args() {
@@ -195,6 +197,14 @@ parse_args() {
 			;;
 		--yasboot-deploy-extra-args)
 			YASBOOT_DEPLOY_EXTRA_ARGS=${2:?missing value for $1}
+			shift 2
+			;;
+		--cdb | --enable-pluggable-database)
+			CDB=true
+			shift
+			;;
+		--pdb)
+			PDB_NAME=${2:?missing value for $1}
 			shift 2
 			;;
 		--include-steps)
@@ -399,6 +409,22 @@ validate_request() {
 		"" | ASCII | ISO88591 | GBK | UTF8) ;;
 		*) die "--legacy does not support --character-set ${CHARACTER_SET} (22.2-era releases accept ASCII, ISO88591, GBK, UTF8)" ;;
 		esac
+	fi
+	# A container database (CDB) can only be produced at creation time: converting
+	# an existing non-CDB later leaves no pdb_add.toml behind, and "yasboot pdb"
+	# then refuses to operate on it. 22.2-era releases have no container support.
+	if [[ ${CDB} == true ]]; then
+		[[ ${COMMAND}:${SUBCOMMAND} == db:install ]] || die "--cdb is supported only by db install"
+		[[ ${LEGACY} == false ]] || die "--cdb is not supported with --legacy (22.2-era releases have no container database)"
+	fi
+	if [[ -n ${PDB_NAME} ]]; then
+		[[ ${CDB} == true ]] || die "--pdb requires --cdb"
+		[[ ${COMMAND}:${SUBCOMMAND} == db:install ]] || die "--pdb is supported only by db install"
+		is_identifier "${PDB_NAME}" || die "invalid --pdb name"
+		# "yasboot pdb add" drives the primary container only; a standby needs a
+		# separate "yasboot pdb build" after the PDB exists, which this installer
+		# does not orchestrate yet.
+		[[ -z ${STANDBYS} ]] || die "--pdb is not supported with --standbys; create the PDB on the primary and run yasboot pdb build on the standby"
 	fi
 	if [[ -n ${GENERATE_SCRIPT} ]]; then
 		[[ ${LOCAL} == true ]] || die "--generate-script requires --local"

@@ -275,4 +275,34 @@ if env PATH="${FAKE_BIN}:${PATH}" TEST_SS_OUTPUT="${TMP_DIR}/ss-exact-port" \
 fi
 grep -F 'managed port 1920 is already listening' "${TMP_DIR}/port-check-stderr" >/dev/null
 
+# --cdb must reach "package se gen", and --pdb must schedule the C-009 pdb add.
+CDB_LOG="${TMP_DIR}/cdb-scripts"
+CDB_ARGS=(
+	db install --target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test
+	--cluster ys1707 --db-port 1707
+	--install-path /data/yashan/ys1707/yasdb-home --data-path /data/yashan/ys1707/yasdb-data
+	--log-path /data/yashan/ys1707/yasdb-log --stage-dir /data/yashan/ys1707/install
+	--cdb --pdb pdb1 --log-dir "${TMP_DIR}/cdb-logs"
+)
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${CDB_LOG}" \
+	bash "${ROOT_DIR}/yinstall.sh" "${CDB_ARGS[@]}" --include-steps C-004,C-009
+grep -F -- '--enable-pluggable-database' "${CDB_LOG}" >/dev/null
+grep -F -- 'package se gen --help' "${CDB_LOG}" >/dev/null
+grep -F -- 'pdb add -c ys1707 --pdb pdb1' "${CDB_LOG}" >/dev/null
+grep -F -- 'pdb status -c ys1707 --pdb pdb1' "${CDB_LOG}" >/dev/null
+grep -F -- 'pdb_add.toml' "${CDB_LOG}" >/dev/null
+
+# Without --cdb the container flag must not be emitted.
+PLAIN_LOG="${TMP_DIR}/plain-scripts"
+env PATH="${FAKE_BIN}:${PATH}" TEST_SCRIPT_LOG="${PLAIN_LOG}" bash "${ROOT_DIR}/yinstall.sh" \
+	db install --target 10.0.0.11 --package "${TMP_DIR}/yashandb.tar.gz" --db-admin-password test \
+	--cluster ys1707 --db-port 1707 \
+	--install-path /data/yashan/ys1707/yasdb-home --data-path /data/yashan/ys1707/yasdb-data \
+	--log-path /data/yashan/ys1707/yasdb-log --stage-dir /data/yashan/ys1707/install \
+	--log-dir "${TMP_DIR}/plain-logs" --include-steps C-004
+if grep -F -- '--enable-pluggable-database' "${PLAIN_LOG}" >/dev/null; then
+	echo 'container flag was emitted without --cdb' >&2
+	exit 1
+fi
+
 echo "test_ports.sh: passed"
